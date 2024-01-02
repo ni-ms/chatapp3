@@ -1,0 +1,7 @@
+#To do
+1. Separate the chat rooms [DONE]
+2. add the skip functionality [Somewhat done]
+    when a user presses skip, reset the other users connection
+3. Add video and audio chat
+4. Make sure it works with multiple tags [ Done ]
+5. Fix the gender thing
