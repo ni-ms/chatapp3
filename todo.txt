@@ -4,4 +4,12 @@
     when a user presses skip, reset the other users connection
 3. Add video and audio chat
 4. Make sure it works with multiple tags [ Done ]
-5. Fix the gender thing
+5. Fix the gender thing [ DONE ]
+
+
+To Fix:
+
+- Whenever someone skips there’s no notification
+- What if 2 person skips at the same time
+- if u are not connected it should show
+- when finding a match for a user, if says all the people in a nth matched tags are skipped, now find the people in the (n-1)th matched tags for the user
