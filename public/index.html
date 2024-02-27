@@ -52,7 +52,8 @@
         // Go to chat page
         $('#chatButton').click(function () {
             var gender = $('#gender').val();
-            var tags = $('#tags').val().split(',');
+            var tags = $('#tags').val().toLowerCase().split(/[,]+/);
+            // console.log(tags);
             socket.emit('register', {gender: gender, tags: tags});
             $('#registration').hide();
             $('#chat').show();
