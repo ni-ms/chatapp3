@@ -55,6 +55,7 @@ io.on('connection', socket => {
     }
 
     socket.on('register', data => {
+        console.log('REGISTER WITH');
         console.log(data);
         console.log(' and socketid ' + socket.id);
         users[socket.id] = {socket, data, isConnected: false, matchId: null};
