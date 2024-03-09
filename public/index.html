@@ -1,94 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>Chat Application</title>
+    <link rel="stylesheet" href="./index.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.2.1/dist/css/bootstrap.min.css"
-          integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+        integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
 </head>
+
 <body>
 
-<!-- Registration Page -->
-<div id="registration" class="container mt-5">
-    <h2 class="mb-4">SimplyChat</h2>
-    <div class="form-group">
-        <label for="gender">Gender:</label>
-        <select id="gender" class="form-control">
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-        </select>
+    <!-- Registration Page -->
+    <div id="registration">
+        <h2 class="mb-4">SimplyChat</h2>
+        <div class="form-group" id="gender-form-group">
+            <label for="gender">Gender</label>
+            <select id="gender" class="form-control">
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+            </select>
+        </div>
+        <div class="form-group" id="tags-form-group">
+            <label for="tags">Tags</label>
+            <input type="text" id="tags" class="form-control">
+        </div>
+        <button id="chatButton" class="btn btn-primary">Go to Chat</button>
     </div>
-    <div class="form-group">
-        <label for="tags">Tags:</label>
-        <input type="text" id="tags" class="form-control">
-    </div>
-    <button id="chatButton" class="btn btn-primary">Go to Chat</button>
-</div>
 
-<!-- Chat Page -->
-<div id="chat" class="container mt-5" style="display: none;">
-    <h2 class="mb-4">Chat</h2>
-    <div id="messages" class="mb-3"></div>
-    <div class="input-group mb-3">
-        <input type="text" id="messageInput" class="form-control" placeholder="Type your message">
-        <div class="input-group-append">
+    <!-- Chat Page -->
+    <div id="chat" style="display: none;">
+        <h2 class="mb-4">Chat</h2>
+        <div id="messages" class="mb-3"></div>
+        <div class="input-group">
+            <input type="text" id="messageInput" class="form-control" placeholder="Type your message">
             <button id="sendButton" class="btn btn-primary">Send</button>
             <button id="skipButton" class="btn btn-secondary">Skip</button>
         </div>
     </div>
-</div>
 
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
-<script>
-    $(document).ready(function () {
-        var socket = io.connect('http://localhost:3000');
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            var socket = io.connect('http://localhost:3000');
 
-        function handlePageUnload() {
-            socket.emit('disconnect');
-        }
+            function handlePageUnload() {
+                socket.emit('disconnect');
+            }
 
-        // Go to chat page
-        $('#chatButton').click(function () {
-            var gender = $('#gender').val();
-            var tags = $('#tags').val().split(',');
-            socket.emit('register', {gender: gender, tags: tags});
-            $('#registration').hide();
-            $('#chat').show();
+            // Go to chat page
+            $('#chatButton').click(function () {
+                var gender = $('#gender').val();
+                var tags = $('#tags').val().toLowerCase().split(/[,]+/);
+                // console.log(tags);
+                socket.emit('register', { gender: gender, tags: tags });
+                $('#registration').hide();
+                $('#chat').show().css('display', 'flex');
+            });
+
+            // Send a message
+            $('#sendButton').click(function () {
+                var message = $('#messageInput').val();
+                $('#messages').append('<p class="my-1"> You: ' + message + '</p>');
+                socket.emit('message', message);
+                $('#messageInput').val('');
+                $("#messages").animate({ 
+                    scrollTop: $('#messages').get(0).scrollHeight 
+                }, 2000);
+            });
+
+            // Skip the current match
+            $('#skipButton').click(function () {
+                socket.emit('skip');
+            });
+
+            // Receive a message
+            socket.on('message', function (message) {
+                $('#messages').append('<p class="other-1"> Other: ' + message + '</p>');
+                $("#messages").animate({ 
+                    scrollTop: $('#messages').get(0).scrollHeight 
+                }, 2000);
+            });
+
+            // Match with a user
+            socket.on('match', function (data) {
+                $('#messages').append('<p class="matchmsg">Matched with ' + data + '</p>');
+            });
+
+            // Waiting for a match
+            socket.on('waiting', function () {
+                $('#messages').append('<p class="matchmsg">Waiting for a match</p>');
+            });
+
+            // Handle page unload or navigation
+            $(window).on('beforeunload', handlePageUnload);
         });
-
-        // Send a message
-        $('#sendButton').click(function () {
-            var message = $('#messageInput').val();
-            $('#messages').append('<p class="my-1"> You: ' + message + '</p>');
-            socket.emit('message', message);
-            $('#messageInput').val('');
-        });
-
-        // Skip the current match
-        $('#skipButton').click(function () {
-            socket.emit('skip');
-        });
-
-        // Receive a message
-        socket.on('message', function (message) {
-            $('#messages').append('<p class="my-1"> Other: ' + message + '</p>');
-        });
-
-        // Match with a user
-        socket.on('match', function (data) {
-            $('#messages').append('<p class="my-1">Matched with ' + data + '</p>');
-        });
-
-        // Waiting for a match
-        socket.on('waiting', function () {
-            $('#messages').append('<p class="my-1">Waiting for a match</p>');
-        });
-
-        // Handle page unload or navigation
-        $(window).on('beforeunload', handlePageUnload);
-    });
-</script>
+    </script>
 </body>
+
 </html>
