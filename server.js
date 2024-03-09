@@ -27,7 +27,11 @@ io.on('connection', socket => {
                 bestMatch = {matchingTags, user};
             }
         }
+
         if (bestMatch.user) {
+            console.log('Match Queu' + matchQueue);
+            console.log('Potential Matches' + potentialMatches);
+            console.log('Best Match' + bestMatch);
             let matchedTags = bestMatch.matchingTags;
             console.log('matched with ' + bestMatch.user.socket.id + ' and user ' + currentUserSocket.id);
             currentUserSocket.emit('match', matchedTags);
