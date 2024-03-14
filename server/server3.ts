@@ -43,13 +43,12 @@ const io = new Server<
 
 class User {
 
+
     private _socket: any;
-
-
     private _tags: [];
     private isConnected: boolean;
     private _matchId: null;
-    potentialMatches: PriorityQueue<any>;
+    private _potentialMatches: PriorityQueue<any>;
 
     constructor(socket: any, tags: []) {
         this._socket = socket;
@@ -57,7 +56,7 @@ class User {
         this.isConnected = false;
         // matchId is the socket.id of the user's match
         this._matchId = null;
-        this.potentialMatches = new PriorityQueue();
+        this._potentialMatches = new PriorityQueue();
     }
 
     get socket(): any {
@@ -85,10 +84,19 @@ class User {
         this._tags = value;
     }
 
+    get potentialMatches(): PriorityQueue<any> {
+        return this._potentialMatches;
+    }
+
+    set potentialMatches(value: PriorityQueue<any>) {
+        this._potentialMatches = value;
+    }
+
 
 }
 
 class Connections {
+    // inner map is a map of user to weight. Useful for a global view of the graph
     private connections: Map<User, Map<User, number>>;
     private invertedIndex: Map<string, User[]>;
 
@@ -99,19 +107,39 @@ class Connections {
 
     addUser(user: User) {
         this.connections.set(user, new Map());
-        //add to inverted index if not already there
         for (let tag of user.tags) {
             if (!this.invertedIndex.has(tag)) {
                 this.invertedIndex.set(tag, []);
             }
             this.invertedIndex.get(tag)!.push(user);
         }
-        for (let [otherUser, _] of this.connections) {
-            for (let tag of user.tags) {
-                if (otherUser.tags.includes(tag)) {
-                    let commonTagCount = this.getCommonTags(user, otherUser).length;
-                    this.addConnection(user, otherUser, commonTagCount);
+        for (let tag of user.tags) {
+            let usersWithSameTag = this.invertedIndex.get(tag);
+            if (usersWithSameTag) {
+                for (let otherUser of usersWithSameTag) {
+                    if (otherUser !== user) {
+                        let commonTagCount = this.getCommonTags(user, otherUser).length;
+                        this.addConnection(user, otherUser, commonTagCount);
+                    }
                 }
+            }
+        }
+    }
+
+    removeUser(user: User) {
+        this.connections.delete(user);
+        for (let [tag, users] of this.invertedIndex.entries()) {
+            if (users.includes(user)) {
+                users.splice(users.indexOf(user), 1);
+                if (users.length === 0) {
+                    this.invertedIndex.delete(tag);
+                }
+            }
+        }
+        for (let [otherUser, connections] of this.connections.entries()) {
+            if (connections.has(user)) {
+                connections.delete(user);
+                otherUser.potentialMatches.dequeue(user);
             }
         }
     }
@@ -179,6 +207,28 @@ class Logic {
                     break;
                 }
             }
+        }
+    }
+
+    removeUser(socket: any) {
+        let user;
+        for (let users of this.tagIndex.values()) {
+            let foundUser = users.find(u => u.socket === socket);
+            if (foundUser) {
+                user = foundUser;
+                break;
+            }
+        }
+        if (user) {
+            for (let [tag, users] of this.tagIndex.entries()) {
+                if (users.includes(user)) {
+                    users.splice(users.indexOf(user), 1);
+                    if (users.length === 0) {
+                        this.tagIndex.delete(tag);
+                    }
+                }
+            }
+            this.graph.removeUser(user);
         }
     }
 }
