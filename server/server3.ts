@@ -3,12 +3,13 @@ import {PriorityQueue} from './priority_queue';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.use(express.static(path.join(__dirname, '../public')));
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public', 'index.html'));
-});
+
 const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+});
+app.get('/', (req, res) => {
+    // in public folder
+    res.sendFile('index.html', {root: __dirname + '/../public'});
 });
 import {Server} from "socket.io";
 import * as path from "path";
