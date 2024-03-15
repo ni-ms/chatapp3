@@ -1,6 +1,8 @@
 type QueueElement<T> = {
-    value: T;
-    weight: number;
+    user: T;
+    priority: number;
+    socket: any;
+    matchId: string;
 };
 
 type Comparator<T> = (a: QueueElement<T>, b: QueueElement<T>) => boolean;
@@ -11,7 +13,7 @@ export class PriorityQueue<T> {
     private _hashTable: Map<T, number[]>;
 
 
-    constructor(comparator: Comparator<T> = (a, b) => a.weight > b.weight) {
+    constructor(comparator: Comparator<T> = (a, b) => a.priority > b.priority) {
         this._heap = [];
         this._comparator = comparator;
         this._hashTable = new Map<T, number[]>();
@@ -29,8 +31,8 @@ export class PriorityQueue<T> {
         return this._heap[0];
     }
 
-    enqueue(value: T, weight: number): number {
-        this._heap.push({value, weight});
+    enqueue(value: T, weight: number, socket: any, matchId: any): number {
+        this._heap.push({user: value, priority: weight, matchId: matchId, socket: socket});
         let indices = this._hashTable.get(value);
         if (indices) {
             indices.push(this.size() - 1);
@@ -44,12 +46,12 @@ export class PriorityQueue<T> {
 
     private _swap(i: number, j: number): void {
         [this._heap[i], this._heap[j]] = [this._heap[j], this._heap[i]];
-        let indicesI = this._hashTable.get(this._heap[i].value);
+        let indicesI = this._hashTable.get(this._heap[i].user);
         if (indicesI) {
             indicesI.splice(indicesI.indexOf(j), 1);
             indicesI.push(i);
         }
-        let indicesJ = this._hashTable.get(this._heap[j].value);
+        let indicesJ = this._hashTable.get(this._heap[j].user);
         if (indicesJ) {
             indicesJ.splice(indicesJ.indexOf(i), 1);
             indicesJ.push(j);
@@ -66,19 +68,19 @@ export class PriorityQueue<T> {
                     this._hashTable.delete(value);
                 }
                 this._siftDown();
-                return removedElement.value;
+                return removedElement.user;
             }
         } else {
             const poppedValue = this.pop();
             if (poppedValue) {
-                let indices = this._hashTable.get(poppedValue.value);
+                let indices = this._hashTable.get(poppedValue.user);
                 if (indices) {
                     indices.splice(indices.indexOf(this.size()), 1);
                     if (indices.length === 0) {
-                        this._hashTable.delete(poppedValue.value);
+                        this._hashTable.delete(poppedValue.user);
                     }
                 }
-                return poppedValue.value;
+                return poppedValue.user;
             }
         }
         return undefined;
@@ -96,9 +98,9 @@ export class PriorityQueue<T> {
     }
 
 
-    replace(value: T): QueueElement<T> {
+    replace(value: T, matchId: any): QueueElement<T> {
         const replacedValue = this.peek();
-        this._heap[0] = {value, weight: replacedValue.weight};
+        this._heap[0] = {user: value, priority: replacedValue.priority, matchId: matchId, socket: replacedValue.socket};
         this._siftDown();
         return replacedValue;
     }
@@ -114,9 +116,9 @@ export class PriorityQueue<T> {
         if (indices) {
             for (let index of indices) {
                 let element = this._heap[index];
-                if (element.value === value) {
-                    let oldWeight = element.weight;
-                    element.weight = newWeight;
+                if (element.user === value) {
+                    let oldWeight = element.priority;
+                    element.priority = newWeight;
                     this._hashTable.set(value, [index]);
                     if (newWeight > oldWeight) {
                         this._siftUp(index);
@@ -128,6 +130,7 @@ export class PriorityQueue<T> {
             }
         }
     }
+
     private _siftUp(index?: number): void {
         let node = index !== undefined ? index : this.size() - 1;
         while (node > 0 && this._greater(node, this._parent(node))) {

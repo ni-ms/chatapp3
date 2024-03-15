@@ -3,10 +3,15 @@ import {PriorityQueue} from './priority_queue';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.use(express.static(path.join(__dirname, '../public')));
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public', 'index.html'));
+});
 const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 import {Server} from "socket.io";
+import * as path from "path";
 
 interface ServerToClientEvents {
     noArg: () => void;
@@ -132,7 +137,7 @@ class Connections {
         let weight = this.getWeight(user, otherUser);
         if (!this.connections.get(user)?.has(otherUser)) {
             this.connections.get(user)?.set(otherUser, weight);
-            user.potentialMatches.enqueue(otherUser, weight);
+            user.potentialMatches.enqueue(otherUser, weight, otherUser.socket, otherUser.socket.id);
         } else {
             this.connections.get(user)?.set(otherUser, weight);
             user.potentialMatches.updatePriority(otherUser, weight);
@@ -178,22 +183,63 @@ class Connections {
 
 class Logic {
     private graph: Connections;
+    private socketMap: Map<any, User>;
 
     constructor() {
         this.graph = new Connections();
-
+        this.socketMap = new Map();
     }
 
     registerUser(data: { socket: any; tags: any; }) {
         const user = new User(data.socket, data.tags);
         this.graph.addUser(user);
+        this.socketMap.set(data.socket, user);
     }
 
+    getUserBySocket(socket: any): User | null {
+        return this.socketMap.get(socket) || null;
+    }
+
+    getSocketFromMatchId(matchId: string): any | null {
+        const user = Array.from(this.socketMap.values()).find(user => user.socket.id === matchId);
+        return user ? user.socket : null;
+    }
+
+    searchForMatch(user: User) {
+        let potentialMatches = this.graph.searchConnections(user);
+        this.graph.addConnections(user, potentialMatches);
+        let bestMatch = user.potentialMatches.dequeue();
+        if (bestMatch) {
+            emitMatch(user.socket, bestMatch.socket);
+        }
+    }
+
+    skipUser(socket: any) {
+        const user = this.getUserBySocket(socket);
+        if (user) {
+            user.potentialMatches.dequeue();
+
+            const newMatch = user.potentialMatches.peek();
+            if (newMatch) {
+                user.socket.emit('match', newMatch.socket.id);
+                newMatch.socket.emit('match', user.socket.id);
+
+                user.matchId = newMatch.socket.id;
+                newMatch.matchId = user.socket.id;
+            } else {
+                // Emit 'waiting' event to the user
+                user.socket.emit('waiting');
+            }
+        }
+    }
 
     removeUser(socket: any) {
-
+        const user = this.getUserBySocket(socket);
+        if (user) {
+            this.graph.removeUser(user);
+            this.socketMap.delete(socket); // Remove the user from the socketMap
+        }
     }
-
 }
 
 function isPopular(tag: any) {
@@ -207,6 +253,7 @@ io.on("connection", (socket) => {
 
     socket.on("register", (data) => {
         logic.registerUser({socket, tags: data.tags});
+        logic.searchForMatch(new User(socket, data.tags));
     });
 
     socket.on("message", (message) => {
