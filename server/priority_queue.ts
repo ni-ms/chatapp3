@@ -10,6 +10,7 @@ export class PriorityQueue<T> {
     private _comparator: Comparator<T>;
     private _hashTable: Map<T, number[]>;
 
+
     constructor(comparator: Comparator<T> = (a, b) => a.weight > b.weight) {
         this._heap = [];
         this._comparator = comparator;
@@ -108,16 +109,35 @@ export class PriorityQueue<T> {
     }
 
 
-    private _siftUp(): void {
-        let node = this.size() - 1;
+    updatePriority(value: T, newWeight: number): void {
+        let indices = this._hashTable.get(value);
+        if (indices) {
+            for (let index of indices) {
+                let element = this._heap[index];
+                if (element.value === value) {
+                    let oldWeight = element.weight;
+                    element.weight = newWeight;
+                    this._hashTable.set(value, [index]);
+                    if (newWeight > oldWeight) {
+                        this._siftUp(index);
+                    } else {
+                        this._siftDown(index);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    private _siftUp(index?: number): void {
+        let node = index !== undefined ? index : this.size() - 1;
         while (node > 0 && this._greater(node, this._parent(node))) {
             this._swap(node, this._parent(node));
             node = this._parent(node);
         }
     }
 
-    private _siftDown(): void {
-        let node = 0;
+    private _siftDown(index?: number): void {
+        let node = index !== undefined ? index : 0;
         while (
             (this._left(node) < this.size() && this._greater(this._left(node), node)) ||
             (this._right(node) < this.size() && this._greater(this._right(node), node))

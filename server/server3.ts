@@ -42,8 +42,6 @@ const io = new Server<
 >();
 
 class User {
-
-
     private _socket: any;
     private _tags: [];
     private isConnected: boolean;
@@ -113,16 +111,37 @@ class Connections {
             }
             this.invertedIndex.get(tag)!.push(user);
         }
+    }
+
+    searchConnections(user: User): User[] {
+        let potentialUsers: User[] = [];
         for (let tag of user.tags) {
-            let usersWithSameTag = this.invertedIndex.get(tag);
-            if (usersWithSameTag) {
-                for (let otherUser of usersWithSameTag) {
+            let users = this.invertedIndex.get(tag);
+            if (users) {
+                for (let otherUser of users) {
                     if (otherUser !== user) {
-                        let commonTagCount = this.getCommonTags(user, otherUser).length;
-                        this.addConnection(user, otherUser, commonTagCount);
+                        potentialUsers.push(otherUser);
                     }
                 }
             }
+        }
+        return potentialUsers;
+    }
+
+    addConnection(user: User, otherUser: User) {
+        let weight = this.getWeight(user, otherUser);
+        if (!this.connections.get(user)?.has(otherUser)) {
+            this.connections.get(user)?.set(otherUser, weight);
+            user.potentialMatches.enqueue(otherUser, weight);
+        } else {
+            this.connections.get(user)?.set(otherUser, weight);
+            user.potentialMatches.updatePriority(otherUser, weight);
+        }
+    }
+
+    addConnections(user: User, otherUsers: User[]) {
+        for (let otherUser of otherUsers) {
+            this.addConnection(user, otherUser);
         }
     }
 
@@ -148,89 +167,33 @@ class Connections {
         return user1.tags.filter(tag => user2.tags.includes(tag));
     }
 
-    addConnection(user1: User, user2: User, weight: number) {
-        if (!this.connections.has(user1)) {
-            this.connections.set(user1, new Map());
-        }
-        this.connections.get(user1)!.set(user2, weight);
-        user1.potentialMatches.enqueue(user2, weight);
+    getWeight(user1: User, user2: User): number {
+        let commonTags = this.getCommonTags(user1, user2);
+        let totalTags = new Set([...user1.tags, ...user2.tags]).size;
+        return commonTags.length / totalTags;
     }
 
-    removeConnection(user1: User, user2: User) {
-        this.connections.get(user1)?.delete(user2);
-        user1.potentialMatches.dequeue(user2);
-    }
-
-    getConnections(user: User): Map<User, number> | undefined {
-        return this.connections.get(user);
-    }
 }
 
 
 class Logic {
     private graph: Connections;
-    private tagIndex: Map<string, User[]>;
 
     constructor() {
         this.graph = new Connections();
-        this.tagIndex = new Map();
+
     }
 
     registerUser(data: { socket: any; tags: any; }) {
         const user = new User(data.socket, data.tags);
-        for (let tag of user.tags) {
-            if (!this.tagIndex.has(tag)) {
-                this.tagIndex.set(tag, []);
-            }
-            this.tagIndex.get(tag)!.push(user);
-        }
         this.graph.addUser(user);
     }
 
-    getUsersWithTag(tag: string) {
-        return this.tagIndex.get(tag) || [];
-    }
-
-    getCommonTags(user1: User, user2: User) {
-        return user1.tags.filter(tag => user2.tags.includes(tag));
-    }
-
-    findMatch(user: User) {
-        let potentialMatches = user.potentialMatches;
-        while (!potentialMatches.isEmpty()) {
-            let match = potentialMatches.dequeue();
-            if (match) {
-                if (match.potentialMatches.peek().value === user) {
-                    emitMatch(user.socket, match.socket);
-                    user.matchId = match.socket.id;
-                    match.matchId = user.socket.id;
-                    break;
-                }
-            }
-        }
-    }
 
     removeUser(socket: any) {
-        let user;
-        for (let users of this.tagIndex.values()) {
-            let foundUser = users.find(u => u.socket === socket);
-            if (foundUser) {
-                user = foundUser;
-                break;
-            }
-        }
-        if (user) {
-            for (let [tag, users] of this.tagIndex.entries()) {
-                if (users.includes(user)) {
-                    users.splice(users.indexOf(user), 1);
-                    if (users.length === 0) {
-                        this.tagIndex.delete(tag);
-                    }
-                }
-            }
-            this.graph.removeUser(user);
-        }
+
     }
+
 }
 
 function isPopular(tag: any) {
