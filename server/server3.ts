@@ -49,14 +49,14 @@ const io = new Server<
 class User {
     private _socket: any;
     private _tags: [];
-    private isConnected: boolean;
+    private _isConnected: boolean;
     private _matchId: null;
     private _potentialMatches: PriorityQueue<any>;
 
     constructor(socket: any, tags: []) {
         this._socket = socket;
         this._tags = tags
-        this.isConnected = false;
+        this._isConnected = false;
         // matchId is the socket.id of the user's match
         this._matchId = null;
         this._potentialMatches = new PriorityQueue();
@@ -93,6 +93,14 @@ class User {
 
     set potentialMatches(value: PriorityQueue<any>) {
         this._potentialMatches = value;
+    }
+
+    get isConnected(): boolean {
+        return this._isConnected;
+    }
+
+    set isConnected(value: boolean) {
+        this._isConnected = value;
     }
 
 
@@ -139,6 +147,7 @@ class Connections {
             this.connections.get(user)?.set(otherUser, weight);
             user.potentialMatches.enqueue(otherUser, weight, otherUser.socket, otherUser.socket.id);
         } else {
+            // not used
             this.connections.get(user)?.set(otherUser, weight);
             user.potentialMatches.updatePriority(otherUser, weight);
         }
@@ -147,11 +156,13 @@ class Connections {
     addConnections(user: User, otherUsers: User[]) {
         for (let otherUser of otherUsers) {
             this.addConnection(user, otherUser);
+            // check if no common tags -> not added to queue
         }
     }
 
     removeUser(user: User) {
         this.connections.delete(user);
+        // Remove user from inverted index
         for (let [tag, users] of this.invertedIndex.entries()) {
             if (users.includes(user)) {
                 users.splice(users.indexOf(user), 1);
@@ -160,6 +171,7 @@ class Connections {
                 }
             }
         }
+        // Remove user from other users' connections
         for (let [otherUser, connections] of this.connections.entries()) {
             if (connections.has(user)) {
                 connections.delete(user);
@@ -208,9 +220,26 @@ class Logic {
     searchForMatch(user: User) {
         let potentialMatches = this.graph.searchConnections(user);
         this.graph.addConnections(user, potentialMatches);
+        // optimize this
         let bestMatch = user.potentialMatches.dequeue();
         if (bestMatch) {
-            emitMatch(user.socket, bestMatch.socket);
+            this.emitMatch(user.socket, bestMatch.socket);
+        }
+    }
+
+    emitMatch(currentUserSocket: any, bestMatchSocket: any) {
+        const currentUser = this.getUserBySocket(currentUserSocket);
+        const bestMatch = this.getUserBySocket(bestMatchSocket);
+
+        if (currentUser && bestMatch) {
+            currentUser.matchId = bestMatchSocket.id;
+            bestMatch.matchId = currentUserSocket.id;
+
+            currentUser.isConnected = true;
+            bestMatch.isConnected = true;
+
+            currentUserSocket.emit('match', bestMatchSocket.id);
+            bestMatchSocket.emit('match', currentUserSocket.id);
         }
     }
 
@@ -248,7 +277,6 @@ function isPopular(tag: any) {
 }
 
 const logic = new Logic();
-
 io.on("connection", (socket) => {
 
     socket.on("register", (data) => {
@@ -286,7 +314,3 @@ function searchUser() {
     // ...
 }
 
-function emitMatch(currentUserSocket: any, bestMatch: any) {
-    // ...
-    console.log(currentUserSocket, bestMatch);
-}
