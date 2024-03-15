@@ -1,18 +1,19 @@
 import express = require("express");
+import {Server} from "socket.io";
 import {PriorityQueue} from './priority_queue';
+import * as path from 'path';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
+app.use(express.static(path.join(__dirname, '/../public')));
 const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
 app.get('/', (req, res) => {
-    // in public folder
-    res.sendFile('index.html', {root: __dirname + '/../public'});
+    res.sendFile(path.join(__dirname, '/../public/index.html'));
+    res.sendFile(path.join(__dirname, '/../public/styles.css'));
 });
-import {Server} from "socket.io";
-import * as path from "path";
 
 interface ServerToClientEvents {
     noArg: () => void;
