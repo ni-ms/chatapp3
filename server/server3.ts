@@ -237,15 +237,14 @@ export class Logic {
         }
         let potentialMatches = this.graph.searchConnections(user);
         this.graph.addConnections(user, potentialMatches);
-        let bestMatch = user.potentialMatches.dequeue();
+        let bestMatch:Socket = user.potentialMatches.dequeue().matchSocket;
         if (bestMatch) {
-            this.emitMatch(user.socket, bestMatch.socket);
+            this.emitMatch(user.socket, bestMatch);
         }
     }
 
     emitMatch(currentUserSocket: any, bestMatchSocket: any) {
-        currentUserSocket.emit('match', bestMatchSocket.id);
-        bestMatchSocket.emit('match', currentUserSocket.id);
+        console.log('Match found!');
     }
 
     skipUser(socket: any) {
