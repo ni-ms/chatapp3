@@ -1,5 +1,5 @@
 import express = require("express");
-import {Server} from "socket.io";
+import {Server, Socket} from "socket.io";
 import {PriorityQueue} from './priority_queue';
 import * as path from 'path';
 
@@ -49,7 +49,7 @@ const io = new Server<
 >();
 
 export class User {
-    private _socket: any;
+    private _socket: Socket;
     private _tags: [];
     private _isConnected: boolean;
     private _matchId: null;
@@ -196,6 +196,13 @@ class Connections {
         return commonTags.length / totalTags;
     }
 
+    decreaseWeight(user1: User, user2: User) {
+        const weight = this.getWeight(user1, user2);
+        const decreasedWeight = weight - 0.1; // decrease by 10%
+        this.connections.get(user1)?.set(user2, decreasedWeight);
+        this.connections.get(user2)?.set(user1, decreasedWeight);
+    }
+
 }
 
 
@@ -224,9 +231,12 @@ export class Logic {
     }
 
     searchForMatch(user: User) {
+        if (user.isConnected) {
+            console.log('User is already connected. Skipping search.');
+            return;
+        }
         let potentialMatches = this.graph.searchConnections(user);
         this.graph.addConnections(user, potentialMatches);
-        // optimize this
         let bestMatch = user.potentialMatches.dequeue();
         if (bestMatch) {
             this.emitMatch(user.socket, bestMatch.socket);
@@ -238,21 +248,24 @@ export class Logic {
         const bestMatch = this.getUserBySocket(bestMatchSocket);
 
         if (currentUser && bestMatch) {
-            currentUser.matchId = bestMatchSocket.id;
+            currentUser.matchId = bestMatch.socket.id;
             bestMatch.matchId = currentUserSocket.id;
 
             currentUser.isConnected = true;
             bestMatch.isConnected = true;
 
-            currentUserSocket.emit('match', bestMatchSocket.id);
-            bestMatchSocket.emit('match', currentUserSocket.id);
+            currentUser.socket.emit('match', bestMatch.socket.id);
+            bestMatch.socket.emit('match', currentUser.socket.id);
         }
     }
 
     skipUser(socket: any) {
         const user = this.getUserBySocket(socket);
         if (user) {
-            user.potentialMatches.dequeue();
+            const skippedUser = user.potentialMatches.dequeue();
+            if (skippedUser) {
+                this.graph.decreaseWeight(user, skippedUser);
+            }
 
             const newMatch = user.potentialMatches.peek();
             if (newMatch) {
