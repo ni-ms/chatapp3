@@ -48,7 +48,7 @@ const io = new Server<
     SocketData
 >();
 
-class User {
+export class User {
     private _socket: any;
     private _tags: [];
     private _isConnected: boolean;
@@ -144,14 +144,18 @@ class Connections {
     }
 
     addConnection(user: User, otherUser: User) {
+        if (!user || !otherUser) {
+            throw new Error("User not found");
+        }
         let weight = this.getWeight(user, otherUser);
+        if (weight === 0) {
+            return;
+        }
         if (!this.connections.get(user)?.has(otherUser)) {
             this.connections.get(user)?.set(otherUser, weight);
             user.potentialMatches.enqueue(otherUser, weight, otherUser.socket, otherUser.socket.id);
-        } else {
-            // not used
-            this.connections.get(user)?.set(otherUser, weight);
-            user.potentialMatches.updatePriority(otherUser, weight);
+            this.connections.get(otherUser)?.set(user, weight);
+            otherUser.potentialMatches.enqueue(user, weight, user.socket, user.socket.id);
         }
     }
 
@@ -195,7 +199,7 @@ class Connections {
 }
 
 
-class Logic {
+export class Logic {
     private graph: Connections;
     private socketMap: Map<any, User>;
 
@@ -210,8 +214,8 @@ class Logic {
         this.socketMap.set(data.socket, user);
     }
 
-    getUserBySocket(socket: any): User | null {
-        return this.socketMap.get(socket) || null;
+    getUserBySocket(socket: any): User {
+        return this.socketMap.get(socket) || new User(socket, []);
     }
 
     getSocketFromMatchId(matchId: string): any | null {
