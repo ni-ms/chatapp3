@@ -52,32 +52,32 @@ export class User {
     private _socket: Socket;
     private _tags: [];
     private _isConnected: boolean;
-    private _matchId: null;
+    private _matchSocket: Socket;
     private _potentialMatches: PriorityQueue<any>;
 
-    constructor(socket: any, tags: []) {
+    constructor(socket: Socket, tags: []) {
         this._socket = socket;
         this._tags = tags
         this._isConnected = false;
         // matchId is the socket.id of the user's match
-        this._matchId = null;
+        this._matchSocket = {} as Socket;
         this._potentialMatches = new PriorityQueue();
     }
 
-    get socket(): any {
+    get socket(): Socket {
         return this._socket;
     }
 
-    set socket(value: any) {
+    set socket(value: Socket) {
         this._socket = value;
     }
 
-    get matchId(): null {
-        return this._matchId;
+    get matchSocket(): Socket {
+        return this._matchSocket;
     }
 
-    set matchId(value: null) {
-        this._matchId = value;
+    set matchSocket(value: Socket) {
+        this._matchSocket = value;
     }
 
 
@@ -244,19 +244,8 @@ export class Logic {
     }
 
     emitMatch(currentUserSocket: any, bestMatchSocket: any) {
-        const currentUser = this.getUserBySocket(currentUserSocket);
-        const bestMatch = this.getUserBySocket(bestMatchSocket);
-
-        if (currentUser && bestMatch) {
-            currentUser.matchId = bestMatch.socket.id;
-            bestMatch.matchId = currentUserSocket.id;
-
-            currentUser.isConnected = true;
-            bestMatch.isConnected = true;
-
-            currentUser.socket.emit('match', bestMatch.socket.id);
-            bestMatch.socket.emit('match', currentUser.socket.id);
-        }
+        currentUserSocket.emit('match', bestMatchSocket.id);
+        bestMatchSocket.emit('match', currentUserSocket.id);
     }
 
     skipUser(socket: any) {
@@ -272,8 +261,8 @@ export class Logic {
                 user.socket.emit('match', newMatch.socket.id);
                 newMatch.socket.emit('match', user.socket.id);
 
-                user.matchId = newMatch.socket.id;
-                newMatch.matchId = user.socket.id;
+                user.matchSocket = newMatch.socket.id;
+                newMatch.matchSocket = user.socket.id;
             } else {
                 // Emit 'waiting' event to the user
                 user.socket.emit('waiting');

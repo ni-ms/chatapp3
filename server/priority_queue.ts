@@ -2,7 +2,7 @@ type QueueElement<T> = {
     user: T;
     priority: number;
     socket: any;
-    matchId: string;
+    matchSocket: any;
 };
 
 type Comparator<T> = (a: QueueElement<T>, b: QueueElement<T>) => boolean;
@@ -32,7 +32,7 @@ export class PriorityQueue<T> {
     }
 
     enqueue(value: T, weight: number, socket: any, matchId: any): number {
-        this._heap.push({user: value, priority: weight, matchId: matchId, socket: socket});
+        this._heap.push({user: value, priority: weight, matchSocket: matchId, socket: socket});
         let indices = this._hashTable.get(value);
         if (indices) {
             indices.push(this.size() - 1);
@@ -100,7 +100,7 @@ export class PriorityQueue<T> {
 
     replace(value: T, matchId: any): QueueElement<T> {
         const replacedValue = this.peek();
-        this._heap[0] = {user: value, priority: replacedValue.priority, matchId: matchId, socket: replacedValue.socket};
+        this._heap[0] = {user: value, priority: replacedValue.priority, matchSocket: matchId, socket: replacedValue.socket};
         this._siftDown();
         return replacedValue;
     }
