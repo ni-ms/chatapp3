@@ -33,6 +33,7 @@ interface SocketData {
     name: string;
     age: number;
 }
+
 const app = express();
 
 // Serve static files from the "public" directory
@@ -82,6 +83,7 @@ export class User {
 
     set matchSocket(value: Socket) {
         this._matchSocket = value;
+        this._isConnected = value !== {} as Socket;
     }
 
 
@@ -242,18 +244,17 @@ export class Logic {
 
 
     registerUser(data: { socket: Socket; tags: any; }) {
-        console.log('User data:', data.tags);
-        console.log('user socket:', data.socket.id);
-        //console.log('Current SocketMap:',this.socketMap.entries())
+        this.graph.printUserAndConnections();
         const user = new User(data.socket, data.tags);
+        user.socket.emit('waiting');
         this.graph.addUser(user);
         this.socketMap.set(data.socket, user);
+        this.searchForMatch(user);
         return user;
     }
 
 
     searchForMatch(user: User) {
-        user.socket.emit('waiting');
         if (user.isConnected) {
             console.log('User is already connected. Skipping search.');
             return;
@@ -264,14 +265,12 @@ export class Logic {
         }
         let bestMatch = user.potentialMatches.dequeue() || undefined;
         if (bestMatch) {
-            this.emitMatch(user.socket, bestMatch.socket);
-        }
-    }
+            user.matchSocket = bestMatch.socket;
+            bestMatch.matchSocket = user.socket;
 
-    emitMatch(currentUserSocket: Socket, bestMatchSocket: Socket) {
-        console.log('Match found!');
-        currentUserSocket.emit('match', bestMatchSocket);
-        bestMatchSocket.emit('match', currentUserSocket);
+            user.socket.emit('match', bestMatch.socket.id);
+            bestMatch.socket.emit('match', user.socket.id);
+        }
     }
 
     skipUser(socket: Socket) {
@@ -343,8 +342,6 @@ io.on("connection", (socket) => {
     socket.on("register", (data) => {
         try {
             const user = logic.registerUser({socket, tags: data.tags});
-            socket.emit("registered", data);
-            logic.searchForMatch(user);
         } catch (error) {
             console.error(`Error in register event: ${error}`);
         }
