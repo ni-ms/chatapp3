@@ -2,7 +2,7 @@ $(document).ready(function () {
     var socket = io.connect();
 
     function handlePageUnload() {
-        socket.emit('disconnect');
+        socket.emit('leave_chat');
     }
 
     // Go to chat page
