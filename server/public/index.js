@@ -41,6 +41,7 @@ $(document).ready(function () {
 
     // Match with a user
     socket.on('match', function (data) {
+        $('#messages').find('.matchmsg').remove();
         $('#messages').append('<p class="matchmsg">Matched with ' + data + '</p>');
     });
 

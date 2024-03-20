@@ -1,7 +1,6 @@
 import {Server, Socket} from "socket.io";
 import {PriorityQueue} from './priority_queue';
 import express from "express";
-import {createServer} from "http";
 
 
 interface ServerToClientEvents {
@@ -140,7 +139,7 @@ class Connections {
         for (let otherUser of this.searchConnections(user)) {
             this.addConnection(user, otherUser);
         }
-        // update userIdToSocket map
+
         this.userIdToSocket.set(user.socket.id, user);
         this.printUserAndConnections()
     }
@@ -253,7 +252,6 @@ export class Logic {
         return user;
     }
 
-
     searchForMatch(user: User) {
         if (user.isConnected) {
             console.log('User is already connected. Skipping search.');
@@ -267,7 +265,6 @@ export class Logic {
         if (bestMatch) {
             user.matchSocket = bestMatch.socket;
             bestMatch.matchSocket = user.socket;
-
             user.socket.emit('match', bestMatch.socket.id);
             bestMatch.socket.emit('match', user.socket.id);
         }
