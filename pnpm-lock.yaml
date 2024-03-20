@@ -4,9 +4,15 @@ dependencies:
   '@types/jest':
     specifier: ^29.5.12
     version: 29.5.12
+  '@types/jquery':
+    specifier: ^3.5.29
+    version: 3.5.29
   '@types/node':
     specifier: ^20.11.28
     version: 20.11.28
+  '@types/socket.io-client':
+    specifier: ^3.0.0
+    version: 3.0.0
   express:
     specifier: ^4.18.2
     version: 4.18.2
@@ -34,6 +40,9 @@ dependencies:
   ts-node:
     specifier: ^10.9.2
     version: 10.9.2(@types/node@20.11.28)(typescript@5.4.2)
+  tslog:
+    specifier: ^4.9.2
+    version: 4.9.2
   typescript:
     specifier: ^5.4.2
     version: 5.4.2
@@ -798,6 +807,12 @@ packages:
       pretty-format: 29.7.0
     dev: false
 
+  /@types/jquery@3.5.29:
+    resolution: {integrity: sha512-oXQQC9X9MOPRrMhPHHOsXqeQDnWeCDT3PelUIg/Oy8FAbzSZtFHRjc7IpbfFVmpLtJ+UOoywpRsuO5Jxjybyeg==}
+    dependencies:
+      '@types/sizzle': 2.3.8
+    dev: false
+
   /@types/mime@1.3.5:
     resolution: {integrity: sha512-/pyBZWSLD2n0dcHE3hq8s8ZvcETHtEuF+3E7XVt0Ig2nvsVQXdghHVcEkIWjy9A0wKfTn97a/PSDYohKIlnP/w==}
     dev: true
@@ -833,6 +848,21 @@ packages:
       '@types/mime': 3.0.4
       '@types/node': 20.11.28
     dev: true
+
+  /@types/sizzle@2.3.8:
+    resolution: {integrity: sha512-0vWLNK2D5MT9dg0iOo8GlKguPAU02QjmZitPEsXRuJXU/OGIOt9vT9Fc26wtYuavLxtO45v9PGleoL9Z0k1LHg==}
+    dev: false
+
+  /@types/socket.io-client@3.0.0:
+    resolution: {integrity: sha512-s+IPvFoEIjKA3RdJz/Z2dGR4gLgysKi8owcnrVwNjgvc01Lk68LJDDsG2GRqegFITcxmvCMYM7bhMpwEMlHmDg==}
+    deprecated: This is a stub types definition. socket.io-client provides its own type definitions, so you do not need this installed.
+    dependencies:
+      socket.io-client: 4.7.5
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+    dev: false
 
   /@types/stack-utils@2.0.3:
     resolution: {integrity: sha512-9aEbYZ3TbYMznPdcdr3SmIrLXwC/AKZXQeCf9Pgao5CKb8CyHuEX5jzWPTkvregvhRJHcpRO6BFoGW9ycaOkYw==}
@@ -3043,6 +3073,11 @@ packages:
       typescript: 5.4.2
       v8-compile-cache-lib: 3.0.1
       yn: 3.1.1
+    dev: false
+
+  /tslog@4.9.2:
+    resolution: {integrity: sha512-wBM+LRJoNl34Bdu8mYEFxpvmOUedpNUwMNQB/NcuPIZKwdDde6xLHUev3bBjXQU7gdurX++X/YE7gLH8eXYsiQ==}
+    engines: {node: '>=16'}
     dev: false
 
   /type-detect@4.0.8:

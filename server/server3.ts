@@ -1,19 +1,8 @@
-import express = require("express");
 import {Server, Socket} from "socket.io";
 import {PriorityQueue} from './priority_queue';
-import * as path from 'path';
+import express from "express";
+import {createServer} from "http";
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-app.use(express.static(path.join(__dirname, '/../public')));
-const server = app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '/../public/index.html'));
-    res.sendFile(path.join(__dirname, '/../public/styles.css'));
-});
 
 interface ServerToClientEvents {
     noArg: () => void;
@@ -44,13 +33,25 @@ interface SocketData {
     name: string;
     age: number;
 }
+const app = express();
 
-const io = new Server<
-    ClientToServerEvents,
-    ServerToClientEvents,
-    InterServerEvents,
-    SocketData
->();
+// Serve static files from the "public" directory
+app.use(express.static(__dirname + '/public'));
+
+app.get("/", (req, res) => {
+    res.sendFile(__dirname + "/public/index.html");
+});
+const server = app.listen(3000, () => {
+    console.log("listening on http://localhost:3000");
+});
+
+const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(server, {
+    cors: {
+        origin: "http://localhost:3000",
+        methods: ["GET", "POST"]
+    }
+});
+
 export class User {
     private _socket: Socket;
     private _tags: [];
@@ -124,7 +125,7 @@ class Connections {
     }
 
     addUser(user: User) {
-        if(!Array.isArray(user.tags)){
+        if (!Array.isArray(user.tags)) {
             throw new Error("Tags must be an array");
         }
         this.connections.set(user.socket.id, new Map());
@@ -142,7 +143,7 @@ class Connections {
         this.printUserAndConnections()
     }
 
-    printUserAndConnections(){
+    printUserAndConnections() {
         for (let [user, connections] of this.connections.entries()) {
             console.log('User:', user);
             for (let [otherUser, weight] of connections.entries()) {
@@ -241,7 +242,8 @@ export class Logic {
 
 
     registerUser(data: { socket: Socket; tags: any; }) {
-        console.log('Registering user')
+        console.log('User data:', data.tags);
+        console.log('user socket:', data.socket.id);
         //console.log('Current SocketMap:',this.socketMap.entries())
         const user = new User(data.socket, data.tags);
         this.graph.addUser(user);
@@ -251,6 +253,7 @@ export class Logic {
 
 
     searchForMatch(user: User) {
+        user.socket.emit('waiting');
         if (user.isConnected) {
             console.log('User is already connected. Skipping search.');
             return;
@@ -339,6 +342,7 @@ io.on("connection", (socket) => {
 
     socket.on("register", (data) => {
         try {
+            console.log('Socket:', socket.id);
             const user = logic.registerUser({socket, tags: data.tags});
             socket.emit("registered", data);
             logic.searchForMatch(user);
