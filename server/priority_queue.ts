@@ -18,6 +18,19 @@ export class PriorityQueue<T> {
         this._comparator = comparator;
         this._hashTable = new Map<T, number[]>();
     }
+    [Symbol.iterator](): Iterator<QueueElement<T>> {
+        let index = 0;
+
+        return {
+            next: (): IteratorResult<QueueElement<T>> => {
+                if (index < this._heap.length) {
+                    return { value: this._heap[index++], done: false };
+                } else {
+                    return { done: true, value: null };
+                }
+            }
+        };
+    }
 
     size(): number {
         return this._heap.length;

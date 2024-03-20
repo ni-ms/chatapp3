@@ -19,6 +19,10 @@ interface ServerToClientEvents {
     noArg: () => void;
     basicEmit: (a: number, b: string, c: Buffer) => void;
     withAck: (d: string, callback: (e: number) => void) => void;
+    match: (matchId: string) => void;
+    waiting: () => void;
+    disconnect: () => void;
+    registered: (data: any) => void;
 }
 
 interface ClientToServerEvents {
@@ -47,13 +51,12 @@ const io = new Server<
     InterServerEvents,
     SocketData
 >();
-
 export class User {
     private _socket: Socket;
     private _tags: [];
     private _isConnected: boolean;
     private _matchSocket: Socket;
-    private _potentialMatches: PriorityQueue<any>;
+    private _potentialMatches: PriorityQueue<User>;
 
     constructor(socket: Socket, tags: []) {
         this._socket = socket;
@@ -89,7 +92,7 @@ export class User {
         this._tags = value;
     }
 
-    get potentialMatches(): PriorityQueue<any> {
+    get potentialMatches(): PriorityQueue<User> {
         return this._potentialMatches;
     }
 
@@ -110,21 +113,41 @@ export class User {
 
 class Connections {
     // inner map is a map of user to weight. Useful for a global view of the graph
-    private connections: Map<User, Map<User, number>>;
+    private connections: Map<string, Map<User, number>>;
     private invertedIndex: Map<string, User[]>;
+    private userIdToSocket: Map<string, User>;
 
     constructor() {
         this.connections = new Map();
         this.invertedIndex = new Map();
+        this.userIdToSocket = new Map();
     }
 
     addUser(user: User) {
-        this.connections.set(user, new Map());
+        if(!Array.isArray(user.tags)){
+            throw new Error("Tags must be an array");
+        }
+        this.connections.set(user.socket.id, new Map());
         for (let tag of user.tags) {
             if (!this.invertedIndex.has(tag)) {
                 this.invertedIndex.set(tag, []);
             }
             this.invertedIndex.get(tag)!.push(user);
+        }
+        for (let otherUser of this.searchConnections(user)) {
+            this.addConnection(user, otherUser);
+        }
+        // update userIdToSocket map
+        this.userIdToSocket.set(user.socket.id, user);
+        this.printUserAndConnections()
+    }
+
+    printUserAndConnections(){
+        for (let [user, connections] of this.connections.entries()) {
+            console.log('User:', user);
+            for (let [otherUser, weight] of connections.entries()) {
+                console.log('Connection:', otherUser.socket.id, weight);
+            }
         }
     }
 
@@ -151,23 +174,19 @@ class Connections {
         if (weight === 0) {
             return;
         }
-        if (!this.connections.get(user)?.has(otherUser)) {
-            this.connections.get(user)?.set(otherUser, weight);
+        let userConnections = this.connections.get(user.socket.id);
+        let otherUserConnections = this.connections.get(otherUser.socket.id);
+        if (!userConnections?.has(otherUser)) {
+            userConnections?.set(otherUser, weight);
+            otherUserConnections?.set(user, weight);
             user.potentialMatches.enqueue(otherUser, weight, otherUser.socket, otherUser.socket.id);
-            this.connections.get(otherUser)?.set(user, weight);
             otherUser.potentialMatches.enqueue(user, weight, user.socket, user.socket.id);
         }
     }
 
-    addConnections(user: User, otherUsers: User[]) {
-        for (let otherUser of otherUsers) {
-            this.addConnection(user, otherUser);
-            // check if no common tags -> not added to queue
-        }
-    }
 
     removeUser(user: User) {
-        this.connections.delete(user);
+        this.connections.delete(user.socket.id);
         // Remove user from inverted index
         for (let [tag, users] of this.invertedIndex.entries()) {
             if (users.includes(user)) {
@@ -181,7 +200,11 @@ class Connections {
         for (let [otherUser, connections] of this.connections.entries()) {
             if (connections.has(user)) {
                 connections.delete(user);
-                otherUser.potentialMatches.dequeue(user);
+                let other = this.userIdToSocket.get(otherUser) as User;
+                if (other) {
+                    other.potentialMatches.dequeue(user);
+                }
+
             }
         }
     }
@@ -199,36 +222,33 @@ class Connections {
     decreaseWeight(user1: User, user2: User) {
         const weight = this.getWeight(user1, user2);
         const decreasedWeight = weight - 0.1; // decrease by 10%
-        this.connections.get(user1)?.set(user2, decreasedWeight);
-        this.connections.get(user2)?.set(user1, decreasedWeight);
+        this.connections.get(user1.socket.id)?.set(user2, decreasedWeight);
+        this.connections.get(user2.socket.id)?.set(user1, decreasedWeight);
+        user1.potentialMatches.updatePriority(user2, decreasedWeight);
+        user2.potentialMatches.updatePriority(user1, decreasedWeight);
     }
-
 }
 
 
 export class Logic {
     private graph: Connections;
-    private socketMap: Map<any, User>;
+    private socketMap: Map<Socket, User>;
 
     constructor() {
         this.graph = new Connections();
         this.socketMap = new Map();
     }
 
-    registerUser(data: { socket: any; tags: any; }) {
+
+    registerUser(data: { socket: Socket; tags: any; }) {
+        console.log('Registering user')
+        //console.log('Current SocketMap:',this.socketMap.entries())
         const user = new User(data.socket, data.tags);
         this.graph.addUser(user);
         this.socketMap.set(data.socket, user);
+        return user;
     }
 
-    getUserBySocket(socket: any): User {
-        return this.socketMap.get(socket) || new User(socket, []);
-    }
-
-    getSocketFromMatchId(matchId: string): any | null {
-        const user = Array.from(this.socketMap.values()).find(user => user.socket.id === matchId);
-        return user ? user.socket : null;
-    }
 
     searchForMatch(user: User) {
         if (user.isConnected) {
@@ -236,18 +256,22 @@ export class Logic {
             return;
         }
         let potentialMatches = this.graph.searchConnections(user);
-        this.graph.addConnections(user, potentialMatches);
-        let bestMatch:Socket = user.potentialMatches.dequeue().matchSocket;
+        for (let match of potentialMatches) {
+            this.graph.addConnection(user, match);
+        }
+        let bestMatch = user.potentialMatches.dequeue() || undefined;
         if (bestMatch) {
-            this.emitMatch(user.socket, bestMatch);
+            this.emitMatch(user.socket, bestMatch.socket);
         }
     }
 
-    emitMatch(currentUserSocket: any, bestMatchSocket: any) {
+    emitMatch(currentUserSocket: Socket, bestMatchSocket: Socket) {
         console.log('Match found!');
+        currentUserSocket.emit('match', bestMatchSocket);
+        bestMatchSocket.emit('match', currentUserSocket);
     }
 
-    skipUser(socket: any) {
+    skipUser(socket: Socket) {
         const user = this.getUserBySocket(socket);
         if (user) {
             const skippedUser = user.potentialMatches.dequeue();
@@ -263,7 +287,6 @@ export class Logic {
                 user.matchSocket = newMatch.socket.id;
                 newMatch.matchSocket = user.socket.id;
             } else {
-                // Emit 'waiting' event to the user
                 user.socket.emit('waiting');
             }
         }
@@ -276,48 +299,108 @@ export class Logic {
             this.socketMap.delete(socket); // Remove the user from the socketMap
         }
     }
-}
 
-function isPopular(tag: any) {
-    // ...
-    console.log(tag);
+    sendMessage(user1: Socket, user2: Socket, message: string) {
+        user1.emit('message', message);
+        user2.emit('message', message);
+    }
+
+    sendTyping(user1: Socket, user2: Socket) {
+        user1.emit('typing');
+        user2.emit('typing');
+    }
+
+    stopTyping(user1: Socket, user2: Socket) {
+        user1.emit('stop_typing');
+        user2.emit('stop_typing');
+    }
+
+    leaveChat(user1: Socket, user2: Socket) {
+        user1.emit('leave_chat');
+        user2.emit('leave_chat');
+    }
+
+    disconnect(user1: Socket, user2: Socket) {
+        this.leaveChat(user1, user2);
+        user1.emit('disconnect');
+        user2.emit('disconnect');
+    }
+
+    getUserBySocket(socket: Socket): User {
+        if (this.socketMap.get(socket)) {
+            return <User>this.socketMap.get(socket);
+        }
+        return {} as User;
+    }
 }
 
 const logic = new Logic();
 io.on("connection", (socket) => {
 
     socket.on("register", (data) => {
-        logic.registerUser({socket, tags: data.tags});
-        logic.searchForMatch(new User(socket, data.tags));
+        try {
+            const user = logic.registerUser({socket, tags: data.tags});
+            socket.emit("registered", data);
+            logic.searchForMatch(user);
+        } catch (error) {
+            console.error(`Error in register event: ${error}`);
+        }
     });
 
     socket.on("message", (message) => {
-        // ...
+        try {
+            const user = logic.getUserBySocket(socket);
+            if (user && user.matchSocket) {
+                logic.sendMessage(socket, user.matchSocket, message);
+            }
+        } catch (error) {
+            console.error(`Error in message event: ${error}`);
+        }
     });
 
     socket.on("typing", () => {
-        // ...
+        try {
+            const user = logic.getUserBySocket(socket);
+            if (user && user.matchSocket) {
+                logic.sendTyping(socket, user.matchSocket);
+            }
+        } catch (error) {
+            console.error(`Error in typing event: ${error}`);
+        }
     });
 
     socket.on("stop_typing", () => {
-        // ...
-    });
-
-    socket.on("skip", () => {
-        // ...
+        try {
+            const user = logic.getUserBySocket(socket);
+            if (user && user.matchSocket) {
+                logic.stopTyping(socket, user.matchSocket);
+            }
+        } catch (error) {
+            console.error(`Error in stop_typing event: ${error}`);
+        }
     });
 
     socket.on("disconnect", () => {
-        // ...
+        try {
+            const user = logic.getUserBySocket(socket);
+            if (user && user.matchSocket) {
+                logic.disconnect(socket, user.matchSocket);
+                logic.removeUser(socket);
+            }
+        } catch (error) {
+            console.error(`Error in disconnect event: ${error}`);
+        }
     });
 
     socket.on("leave_chat", () => {
-        // ...
+        try {
+            const user = logic.getUserBySocket(socket);
+            if (user && user.matchSocket) {
+                logic.leaveChat(socket, user.matchSocket);
+            }
+        } catch (error) {
+            console.error(`Error in leave_chat event: ${error}`);
+        }
     });
 });
-
-
-function searchUser() {
-    // ...
-}
 

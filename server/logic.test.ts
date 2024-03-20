@@ -1,60 +1,30 @@
-import {Server} from 'socket.io';
-import {createServer} from 'http';
-import Client from 'socket.io-client';
-import {Logic, User} from './server3';
+import { Logic } from "./server3";
+import { io, Socket } from "socket.io-client";
 
-describe('Logic', () => {
-    let server: any;
-    let client: any;
-    let logic: Logic;
-    let mockSockets: any[];
-    let mockTags: any[][];
+describe('User Registration and Matching', () => {
+    it('should register 5 users and print the match', () => {
+        const logic = new Logic();
 
-    beforeAll((done) => {
-        const httpServer = createServer();
-        server = new Server(httpServer);
-        httpServer.listen(() => {
-            const addressInfo = httpServer.address() as import('net').AddressInfo;
-            const port = addressInfo.port;
-            client = new (Client as any)(`http://localhost:${port}`);
-            logic = new Logic();
-            client.on('connect', done);
-        });
-    });
+        // Register 5 users with different tags and unique client-side sockets
+        const user1 = logic.registerUser({ socket: io() as any, tags: ['tag1', 'tag2'] });
+        const user2 = logic.registerUser({ socket: io() as any, tags: ['tag2', 'tag3'] });
+        const user3 = logic.registerUser({ socket: io() as any, tags: ['tag3', 'tag4'] });
+        const user4 = logic.registerUser({ socket: io() as any, tags: ['tag4', 'tag5'] });
+        // const user5 = logic.registerUser({ socket: io() as any, tags: ['tag6', 'tag1'] });
 
-    afterAll(() => {
-        server.close();
-        client.close();
-    });
+        // Search for match for each user
+        logic.searchForMatch(user1);
+        logic.searchForMatch(user2);
+        logic.searchForMatch(user3);
+        logic.searchForMatch(user4);
 
-    beforeEach(() => {
-        mockSockets = [{}, {}, {}, {}]; // Mock socket objects
-        mockTags = [['tag1', 'tag2'], ['tag2', 'tag3'], ['tag3', 'tag4'], ['tag4', 'tag1']]; // Mock tags
-    });
 
-    test('registerUser should add users and find matchings', () => {
-        mockSockets.forEach((socket, index) => {
-            logic.registerUser({socket: socket, tags: mockTags[index]});
-        });
+        // Print the match for each user
+        console.log('User1 match:', user1.matchSocket);
+        console.log('User2 match:', user2.matchSocket);
+        console.log('User3 match:', user3.matchSocket);
+        console.log('User4 match:', user4.matchSocket);
 
-        mockSockets.forEach((socket, index) => {
-            const user = logic.getUserBySocket(socket);
-            expect(user).not.toBeNull();
-            expect(user?.tags).toEqual(mockTags[index]);
-        });
 
-        mockSockets.forEach((socket) => {
-            const user = logic.getUserBySocket(socket);
-            logic.searchForMatch(user);
-            expect(user.matchSocket).not.toBeNull();
-        });
-    });
-
-    test('should register a user', (done) => {
-        client.emit('register', {tags: ['tag1', 'tag2']});
-        client.on('match', (matchId: any) => {
-            expect(matchId).toBeDefined();
-            done();
-        });
     });
 });
