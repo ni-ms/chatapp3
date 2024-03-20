@@ -342,7 +342,6 @@ io.on("connection", (socket) => {
 
     socket.on("register", (data) => {
         try {
-            console.log('Socket:', socket.id);
             const user = logic.registerUser({socket, tags: data.tags});
             socket.emit("registered", data);
             logic.searchForMatch(user);
