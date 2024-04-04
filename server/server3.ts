@@ -277,7 +277,6 @@ export class Logic {
             if (skippedUser) {
                 this.graph.decreaseWeight(user, skippedUser);
             }
-
             const newMatch = user.potentialMatches.peek();
             if (newMatch) {
                 user.socket.emit('match', newMatch.socket.id);
@@ -300,7 +299,6 @@ export class Logic {
     }
 
     sendMessage(user1: Socket, user2: Socket, message: string) {
-        user1.emit('message', message);
         user2.emit('message', message);
     }
 
@@ -352,6 +350,14 @@ io.on("connection", (socket) => {
             }
         } catch (error) {
             console.error(`Error in message event: ${error}`);
+        }
+    });
+
+    socket.on("skip", () => {
+        try {
+            logic.skipUser(socket);
+        } catch (error) {
+            console.error(`Error in skip event: ${error}`);
         }
     });
 
