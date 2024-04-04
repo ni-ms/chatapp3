@@ -141,7 +141,6 @@ class Connections {
         }
 
         this.userIdToSocket.set(user.socket.id, user);
-        this.printUserAndConnections()
     }
 
     printUserAndConnections() {
@@ -261,7 +260,12 @@ export class Logic {
         for (let match of potentialMatches) {
             this.graph.addConnection(user, match);
         }
-        let bestMatch = user.potentialMatches.dequeue() || undefined;
+        let bestMatch;
+        let index = 0;
+        do {
+            bestMatch = user.potentialMatches.peekAt(index);
+            index++;
+        } while (bestMatch && bestMatch.user.isConnected);
         if (bestMatch) {
             user.matchSocket = bestMatch.socket;
             bestMatch.matchSocket = user.socket;

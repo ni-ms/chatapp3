@@ -18,15 +18,16 @@ export class PriorityQueue<T> {
         this._comparator = comparator;
         this._hashTable = new Map<T, number[]>();
     }
+
     [Symbol.iterator](): Iterator<QueueElement<T>> {
         let index = 0;
 
         return {
             next: (): IteratorResult<QueueElement<T>> => {
                 if (index < this._heap.length) {
-                    return { value: this._heap[index++], done: false };
+                    return {value: this._heap[index++], done: false};
                 } else {
-                    return { done: true, value: null };
+                    return {done: true, value: null};
                 }
             }
         };
@@ -43,6 +44,11 @@ export class PriorityQueue<T> {
     peek(): QueueElement<T> {
         return this._heap[0];
     }
+
+    peekAt(index: number): QueueElement<T> {
+        return this._heap[index];
+    }
+
 
     enqueue(value: T, weight: number, socket: any, matchId: any): number {
         this._heap.push({user: value, priority: weight, matchSocket: matchId, socket: socket});
@@ -113,7 +119,12 @@ export class PriorityQueue<T> {
 
     replace(value: T, matchId: any): QueueElement<T> {
         const replacedValue = this.peek();
-        this._heap[0] = {user: value, priority: replacedValue.priority, matchSocket: matchId, socket: replacedValue.socket};
+        this._heap[0] = {
+            user: value,
+            priority: replacedValue.priority,
+            matchSocket: matchId,
+            socket: replacedValue.socket
+        };
         this._siftDown();
         return replacedValue;
     }
