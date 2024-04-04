@@ -3,6 +3,7 @@ type QueueElement<T> = {
     priority: number;
     socket: any;
     matchSocket: any;
+    isConnected: boolean;
 };
 
 type Comparator<T> = (a: QueueElement<T>, b: QueueElement<T>) => boolean;
@@ -51,7 +52,7 @@ export class PriorityQueue<T> {
 
 
     enqueue(value: T, weight: number, socket: any, matchId: any): number {
-        this._heap.push({user: value, priority: weight, matchSocket: matchId, socket: socket});
+        this._heap.push({user: value, priority: weight, matchSocket: matchId, socket: socket, isConnected: false});
         let indices = this._hashTable.get(value);
         if (indices) {
             indices.push(this.size() - 1);
@@ -123,7 +124,8 @@ export class PriorityQueue<T> {
             user: value,
             priority: replacedValue.priority,
             matchSocket: matchId,
-            socket: replacedValue.socket
+            socket: replacedValue.socket,
+            isConnected: false
         };
         this._siftDown();
         return replacedValue;

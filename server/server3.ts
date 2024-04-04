@@ -269,6 +269,8 @@ export class Logic {
         if (bestMatch) {
             user.matchSocket = bestMatch.socket;
             bestMatch.matchSocket = user.socket;
+            user.isConnected = true;
+            bestMatch.user.isConnected = true;
             user.socket.emit('match', bestMatch.socket.id);
             bestMatch.socket.emit('match', user.socket.id);
         }
@@ -285,7 +287,6 @@ export class Logic {
             if (newMatch) {
                 user.socket.emit('match', newMatch.socket.id);
                 newMatch.socket.emit('match', user.socket.id);
-
                 user.matchSocket = newMatch.socket.id;
                 newMatch.matchSocket = user.socket.id;
             } else {
