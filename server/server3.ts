@@ -119,6 +119,7 @@ class Connections {
     private invertedIndex: Map<string, User[]>;
     private userIdToSocket: Map<string, User>;
 
+
     constructor() {
         this.connections = new Map();
         this.invertedIndex = new Map();
@@ -126,21 +127,26 @@ class Connections {
     }
 
     addUser(user: User) {
+        console.log('Adding user:', user.socket.id);
+        console.log('User tags:', user.tags);
         if (!Array.isArray(user.tags)) {
             throw new Error("Tags must be an array");
         }
         this.connections.set(user.socket.id, new Map());
+        console.log('User added to connections');
         for (let tag of user.tags) {
             if (!this.invertedIndex.has(tag)) {
                 this.invertedIndex.set(tag, []);
             }
             this.invertedIndex.get(tag)!.push(user);
+            console.log('User added to inverted index for tag:', tag);
         }
         for (let otherUser of this.searchConnections(user)) {
             this.addConnection(user, otherUser);
+            console.log('Connection added between user:', user.socket.id, 'and other user:', otherUser.socket.id);
         }
-
         this.userIdToSocket.set(user.socket.id, user);
+        console.log('User added to userIdToSocket');
     }
 
     printUserAndConnections() {
@@ -153,18 +159,19 @@ class Connections {
     }
 
     searchConnections(user: User): User[] {
-        let potentialUsers: User[] = [];
+        let potentialUsersSet = new Set<User>();
         for (let tag of user.tags) {
             let users = this.invertedIndex.get(tag);
             if (users) {
                 for (let otherUser of users) {
-                    if (otherUser !== user) {
-                        potentialUsers.push(otherUser);
+                    if (otherUser !== user && !otherUser.isConnected) {
+                        console.log('Potential user for ' + user + 'is: ' + otherUser.socket.id)
+                        potentialUsersSet.add(otherUser);
                     }
                 }
             }
         }
-        return potentialUsers;
+        return Array.from(potentialUsersSet);
     }
 
     addConnection(user: User, otherUser: User) {
@@ -172,51 +179,78 @@ class Connections {
             throw new Error("User not found");
         }
         let weight = this.getWeight(user, otherUser);
+        console.log('Weight between user:', user.socket.id, 'and other user:', otherUser.socket.id, 'is:', weight);
         if (weight === 0) {
+            console.log('Weight is 0');
             return;
         }
-        let userConnections = this.connections.get(user.socket.id);
-        let otherUserConnections = this.connections.get(otherUser.socket.id);
+        let userConnections = new Map(this.connections.get(user.socket.id));
+        let otherUserConnections = new Map(this.connections.get(otherUser.socket.id));
+        if (userConnections.size === 0) {
+            console.log('User has no connections');
+        } else {
+            console.log('User connections:', JSON.stringify(Array.from(userConnections.entries()), null, 2));
+        }
+
+        if (otherUserConnections.size === 0) {
+            console.log('Other user has no connections');
+        } else {
+            console.log('Other user connections:', JSON.stringify(Array.from(otherUserConnections.entries()), null, 2));
+        }
+
         if (!userConnections?.has(otherUser)) {
             userConnections?.set(otherUser, weight);
             otherUserConnections?.set(user, weight);
             user.potentialMatches.enqueue(otherUser, weight, otherUser.socket, otherUser.socket.id);
             otherUser.potentialMatches.enqueue(user, weight, user.socket, user.socket.id);
+            console.log('User added to other user connections');
         }
     }
 
 
     removeUser(user: User) {
         this.connections.delete(user.socket.id);
+        console.log('Inverted index:', this.invertedIndex);
         // Remove user from inverted index
         for (let [tag, users] of this.invertedIndex.entries()) {
             if (users.includes(user)) {
+                console.log('Removing user:', user.socket.id, 'from tag:', tag)
                 users.splice(users.indexOf(user), 1);
                 if (users.length === 0) {
+                    console.log('No more users with tag:', tag)
                     this.invertedIndex.delete(tag);
                 }
             }
         }
+        console.log('Inverted index after removing user:', JSON.stringify(this.invertedIndex));
+        this.userIdToSocket.delete(user.socket.id);
         // Remove user from other users' connections
+        console.log('User:', user.socket.id, 'is being removed from connections', this.connections.entries());
         for (let [otherUser, connections] of this.connections.entries()) {
             if (connections.has(user)) {
+
                 connections.delete(user);
                 let other = this.userIdToSocket.get(otherUser) as User;
+                console.log('User:', user.socket.id, 'removed from connections of other user:', other.socket.id)
                 if (other) {
                     other.potentialMatches.dequeue(user);
                 }
-
             }
         }
+        console.log('User removed from connections:', this.connections.entries());
     }
 
     getCommonTags(user1: User, user2: User) {
+        console.log('User1 tags:', user1.tags);
+        console.log('User2 tags:', user2.tags);
         return user1.tags.filter(tag => user2.tags.includes(tag));
     }
 
     getWeight(user1: User, user2: User): number {
         let commonTags = this.getCommonTags(user1, user2);
         let totalTags = new Set([...user1.tags, ...user2.tags]).size;
+        console.log('Common tags:', commonTags);
+        console.log('Total tags:', totalTags);
         return commonTags.length / totalTags;
     }
 
@@ -227,6 +261,7 @@ class Connections {
         this.connections.get(user2.socket.id)?.set(user1, decreasedWeight);
         user1.potentialMatches.updatePriority(user2, decreasedWeight);
         user2.potentialMatches.updatePriority(user1, decreasedWeight);
+        console.log('Weight between user:', user1.socket.id, 'and other user:', user2.socket.id, 'is:', decreasedWeight, 'after decrease.', 'Old weight:', weight);
     }
 }
 
@@ -247,6 +282,10 @@ export class Logic {
         user.socket.emit('waiting');
         this.graph.addUser(user);
         this.socketMap.set(data.socket, user);
+
+        // Print the user's potential matches
+        console.log('Current user priority queue:', JSON.stringify(user.potentialMatches, null, 2));
+
         this.searchForMatch(user);
         return user;
     }
@@ -266,9 +305,9 @@ export class Logic {
             bestMatch = user.potentialMatches.peekAt(index);
             index++;
         } while (bestMatch && bestMatch.user.isConnected);
-        if (bestMatch) {
+        if (bestMatch && bestMatch.socket) {
             user.matchSocket = bestMatch.socket;
-            bestMatch.matchSocket = user.socket;
+            bestMatch.user.matchSocket = user.socket;
             user.isConnected = true;
             bestMatch.user.isConnected = true;
             user.socket.emit('match', bestMatch.socket.id);
@@ -278,20 +317,43 @@ export class Logic {
 
     skipUser(socket: Socket) {
         const user = this.getUserBySocket(socket);
-        if (user) {
-            const skippedUser = user.potentialMatches.dequeue();
-            if (skippedUser) {
-                this.graph.decreaseWeight(user, skippedUser);
-            }
-            const newMatch = user.potentialMatches.peek();
-            if (newMatch) {
-                user.socket.emit('match', newMatch.socket.id);
-                newMatch.socket.emit('match', user.socket.id);
-                user.matchSocket = newMatch.socket.id;
-                newMatch.matchSocket = user.socket.id;
-            } else {
-                user.socket.emit('waiting');
-            }
+        if (!user) {
+            console.error('User not found');
+            return;
+        }
+        console.log('User that is skipping:', user.socket.id)
+
+        if (user.potentialMatches.isEmpty()) {
+            console.error('No potential matches for user');
+            return;
+        }
+
+        const skippedUser = user.potentialMatches.dequeue();
+        if (!skippedUser) {
+            console.error('Skipped user not found');
+            return;
+        }
+        console.log('Skipped user:', skippedUser.socket.id);
+        if (skippedUser) {
+            this.graph.decreaseWeight(user, skippedUser);
+            this.leaveChat(user.socket, skippedUser.socket);
+            skippedUser.potentialMatches.updatePriority(user, this.graph.getWeight(user, skippedUser)); // update the priority of the user in the other user's priority queue
+        }
+
+        if (user.potentialMatches.isEmpty()) {
+            console.log('No more matches for user');
+            user.socket.emit('waiting');
+            return;
+        }
+
+        const newMatch = user.potentialMatches.peek();
+        if (newMatch) {
+            user.socket.emit('match', newMatch.socket.id);
+            newMatch.socket.emit('match', user.socket.id);
+            user.matchSocket = newMatch.socket.id;
+            newMatch.matchSocket = user.socket.id;
+        } else {
+            user.socket.emit('waiting');
         }
     }
 
@@ -304,6 +366,7 @@ export class Logic {
     }
 
     sendMessage(user1: Socket, user2: Socket, message: string) {
+        console.log('Sending message:', message, 'from user:', user1.id, 'to user:', user2.id);
         user2.emit('message', message);
     }
 
@@ -322,10 +385,10 @@ export class Logic {
         user2.emit('leave_chat');
     }
 
-    disconnect(user1: Socket, user2: Socket) {
+    disconnectEvent(user1: Socket, user2: Socket) {
         this.leaveChat(user1, user2);
-        user1.emit('disconnect');
-        user2.emit('disconnect');
+        user1.disconnect(true); // disconnect the socket
+        user2.disconnect(true); // disconnect the socket
     }
 
     getUserBySocket(socket: Socket): User {
@@ -392,7 +455,7 @@ io.on("connection", (socket) => {
         try {
             const user = logic.getUserBySocket(socket);
             if (user && user.matchSocket) {
-                logic.disconnect(socket, user.matchSocket);
+                logic.disconnectEvent(socket, user.matchSocket);
                 logic.removeUser(socket);
             }
         } catch (error) {
