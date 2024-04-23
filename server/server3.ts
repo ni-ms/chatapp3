@@ -306,6 +306,7 @@ export class Logic {
             return;
         }
         let potentialMatches = this.graph.searchConnections(user);
+        console.log('Potential matches:', potentialMatches)
         for (let match of potentialMatches) {
             this.graph.addConnection(user, match);
         }
@@ -316,6 +317,7 @@ export class Logic {
             index++;
         } while (bestMatch && bestMatch.user.isConnected);
         if (bestMatch && bestMatch.socket) {
+            console.log('Best match:', bestMatch.socket.id)
             user.matchSocket = bestMatch.socket;
             bestMatch.user.matchSocket = user.socket;
             user.isConnected = true;
@@ -339,10 +341,13 @@ export class Logic {
         }
 
         const skippedUser = user.potentialMatches.dequeue();
+        user.isConnected = false;
+
         if (!skippedUser) {
             console.error('Skipped user not found');
             return;
         }
+        skippedUser.isConnected = false;
         console.log('Skipped user:', skippedUser.socket.id);
         if (skippedUser) {
             this.graph.decreaseWeight(user, skippedUser);
