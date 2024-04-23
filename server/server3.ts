@@ -1,5 +1,6 @@
 import {Server, Socket} from "socket.io";
 import {PriorityQueue} from './priority_queue';
+import {parse, stringify} from 'flatted';
 import express from "express";
 
 
@@ -118,12 +119,14 @@ class Connections {
     private connections: Map<string, Map<User, number>>;
     private invertedIndex: Map<string, User[]>;
     private userIdToSocket: Map<string, User>;
+    private addedUsers: Set<string>;
 
 
     constructor() {
         this.connections = new Map();
         this.invertedIndex = new Map();
         this.userIdToSocket = new Map();
+        this.addedUsers = new Set();
     }
 
     addUser(user: User) {
@@ -141,10 +144,17 @@ class Connections {
             this.invertedIndex.get(tag)!.push(user);
             console.log('User added to inverted index for tag:', tag);
         }
-        for (let otherUser of this.searchConnections(user)) {
-            this.addConnection(user, otherUser);
-            console.log('Connection added between user:', user.socket.id, 'and other user:', otherUser.socket.id);
+
+        // Iterate over all existing users
+        for (let [_, otherUser] of this.userIdToSocket.entries()) {
+            // Check if the existing user and the new user have at least one common tag
+            if (this.getCommonTags(user, otherUser).length > 0) {
+                // Add the existing user to the new user's priority queue and vice versa
+                this.addConnection(user, otherUser);
+                console.log('Connection added between user:', user.socket.id, 'and other user:', otherUser.socket.id);
+            }
         }
+
         this.userIdToSocket.set(user.socket.id, user);
         console.log('User added to userIdToSocket');
     }
@@ -184,18 +194,15 @@ class Connections {
             console.log('Weight is 0');
             return;
         }
-        let userConnections = new Map(this.connections.get(user.socket.id));
-        let otherUserConnections = new Map(this.connections.get(otherUser.socket.id));
-        if (userConnections.size === 0) {
-            console.log('User has no connections');
-        } else {
-            console.log('User connections:', JSON.stringify(Array.from(userConnections.entries()), null, 2));
+        let userConnections = this.connections.get(user.socket.id);
+        let otherUserConnections = this.connections.get(otherUser.socket.id);
+        if (userConnections === undefined || otherUserConnections === undefined) {
+            throw new Error("User connections not found");
         }
-
-        if (otherUserConnections.size === 0) {
-            console.log('Other user has no connections');
-        } else {
-            console.log('Other user connections:', JSON.stringify(Array.from(otherUserConnections.entries()), null, 2));
+        // Check if the user has already been added to the queue
+        if (this.addedUsers.has(otherUser.socket.id)) {
+            console.log('User:', otherUser.socket.id, 'has already been added to the queue. Skipping.');
+            return;
         }
 
         if (!userConnections?.has(otherUser)) {
@@ -204,6 +211,9 @@ class Connections {
             user.potentialMatches.enqueue(otherUser, weight, otherUser.socket, otherUser.socket.id);
             otherUser.potentialMatches.enqueue(user, weight, user.socket, user.socket.id);
             console.log('User added to other user connections');
+
+            // Add the user to the Set of added users
+            this.addedUsers.add(otherUser.socket.id);
         }
     }
 
@@ -284,7 +294,7 @@ export class Logic {
         this.socketMap.set(data.socket, user);
 
         // Print the user's potential matches
-        console.log('Current user priority queue:', JSON.stringify(user.potentialMatches, null, 2));
+        // console.log('Current user priority queue:', stringify(user.potentialMatches));
 
         this.searchForMatch(user);
         return user;
@@ -336,13 +346,14 @@ export class Logic {
         console.log('Skipped user:', skippedUser.socket.id);
         if (skippedUser) {
             this.graph.decreaseWeight(user, skippedUser);
-            this.leaveChat(user.socket, skippedUser.socket);
+            this.skipConnectionEvents(user, skippedUser);
             skippedUser.potentialMatches.updatePriority(user, this.graph.getWeight(user, skippedUser)); // update the priority of the user in the other user's priority queue
         }
 
         if (user.potentialMatches.isEmpty()) {
             console.log('No more matches for user');
             user.socket.emit('waiting');
+            this.searchForMatch(user);
             return;
         }
 
@@ -354,6 +365,7 @@ export class Logic {
             newMatch.matchSocket = user.socket.id;
         } else {
             user.socket.emit('waiting');
+            this.searchForMatch(user);
         }
     }
 
@@ -366,10 +378,17 @@ export class Logic {
     }
 
     sendMessage(user1: Socket, user2: Socket, message: string) {
-        console.log('Sending message:', message, 'from user:', user1.id, 'to user:', user2.id);
-        user2.emit('message', message);
-    }
+        const sender = this.getUserBySocket(user1);
+        const recipient = this.getUserBySocket(user2);
 
+        // Check if the recipient is the current match of the sender
+        if (sender && recipient && sender.matchSocket.id === recipient.socket.id) {
+            console.log('Sending message:', message, 'from user:', user1.id, 'to user:', user2.id);
+            user2.emit('message', message);
+        } else {
+            console.log('Message not sent. The recipient is not the current match of the sender.');
+        }
+    }
     sendTyping(user1: Socket, user2: Socket) {
         user1.emit('typing');
         user2.emit('typing');
@@ -396,6 +415,13 @@ export class Logic {
             return <User>this.socketMap.get(socket);
         }
         return {} as User;
+    }
+
+    private skipConnectionEvents(user: User, skippedUser: User) {
+        user.isConnected = false;
+        skippedUser.isConnected = false;
+        user.matchSocket = {} as Socket;
+        skippedUser.matchSocket = {} as Socket;
     }
 }
 
