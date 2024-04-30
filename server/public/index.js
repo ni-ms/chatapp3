@@ -50,6 +50,10 @@ $(document).ready(function () {
         $('#messages').append('<p class="matchmsg">Waiting for a match</p>');
     });
 
+    socket.on("skip", function() {
+        $('#messages').append('<p class="matchmsg">Skipped</p>');
+    });
+
     // Handle page unload or navigation
     $(window).on('beforeunload', handlePageUnload);
 });

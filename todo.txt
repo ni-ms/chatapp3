@@ -13,3 +13,10 @@ To Fix:
 - What if 2 person skips at the same time
 - if u are not connected it should show
 - when finding a match for a user, if says all the people in a nth matched tags are skipped, now find the people in the (n-1)th matched tags for the user
+
+
+To Fix:
+If a user is skipped, shouldn't be matched with the same user in the next search.
+optimize it for popular tags ( make it dynamic )
+benchmark it
+
