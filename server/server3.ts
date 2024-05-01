@@ -1,7 +1,8 @@
 import {Server, Socket} from "socket.io";
 import {PriorityQueue} from './priority_queue';
 import express from "express";
-import { Logger, ILogObj } from "tslog";
+import {Logger, ILogObj} from "tslog";
+
 const log: Logger<ILogObj> = new Logger();
 
 
@@ -84,8 +85,8 @@ export class User {
 
     set matchSocket(value: Socket) {
         this._matchSocket = value;
-        this._isConnected = value !== null && value !== undefined;
-        this._isConnected = value !== {} as Socket;
+        this._isConnected = value.id !== undefined;
+        log.debug(`User: ${this._socket.id} isConnected: ${this._isConnected}`);
     }
 
 
@@ -135,6 +136,24 @@ class Connections {
         this.userIdToSocket = new Map();
     }
 
+    printConnections() {
+        for (let [user, connections] of this.connections.entries()) {
+            let connectionString = '';
+            for (let [otherUser, weight] of connections.entries()) {
+                connectionString += `${otherUser.socket.id} - ${weight}, `;
+
+                // Print the priority queue for each connected user
+                let queueString = '';
+                for (let i = 0; i < otherUser.potentialMatches.size(); i++) {
+                    let item = otherUser.potentialMatches.peekAt(i);
+                    queueString += `${item.user.socket.id} - ${item.priority}, `;
+                }
+                log.debug(`User: ${otherUser.socket.id} - Priority Queue: ${queueString.slice(0, -2)}`);
+            }
+            log.debug(`User: ${user} - Connections: ${connectionString.slice(0, -2)}`);
+        }
+    }
+
     addUser(user: User) {
         log.info(`Attempting to add user with socket id: ${user.socket.id}`);
         if (!Array.isArray(user.tags)) {
@@ -164,7 +183,7 @@ class Connections {
         }
     }
 
-    searchConnections(user: User): Set<User>{
+    searchConnections(user: User): Set<User> {
         let potentialUsersSet = new Set<User>();
         for (let tag of user.tags) {
             let users = this.invertedIndex.get(tag);
@@ -192,6 +211,10 @@ class Connections {
         }
         let userConnections = this.connections.get(user.socket.id);
         let otherUserConnections = this.connections.get(otherUser.socket.id);
+        if (!userConnections || !otherUserConnections) {
+            log.error("User connections not found");
+            throw new Error("User connections not found");
+        }
         if (!userConnections?.has(otherUser)) {
             userConnections?.set(otherUser, weight);
             otherUserConnections?.set(user, weight);
@@ -252,8 +275,10 @@ class Connections {
     }
 
     decreaseWeight(user1: User, user2: User) {
-        const weight = this.getWeight(user1, user2);
-        const decreasedWeight = weight * 0.1; // decrease by 10%
+        // Try to get it from map instead of computing every time
+        // const weight = this.getWeight(user1, user2);
+        const weight = this.getWeightByConnections(user1, user2);
+        const decreasedWeight = weight - 0.1; // decrea se by 10%
         this.connections.get(user1.socket.id)?.set(user2, decreasedWeight);
         this.connections.get(user2.socket.id)?.set(user1, decreasedWeight);
         return decreasedWeight;
@@ -284,14 +309,10 @@ export class Logic {
     searchForMatch(user: User) {
         try {
             log.info(`Searching for a match for user: ${user.socket.id}`);
-            if(user.matchSocket.id === undefined){
-                user.isConnected = false;
-            }
-            if (user.isConnected) {
-                log.warn(`User: ${user.socket.id} is already connected with user: ${user.matchSocket.id}`);
-                return;
-            }
-            if(user.potentialMatches.size() === 0){
+            log.debug('User isConnected:', user.isConnected);
+            this.graph.printConnections();
+            user.isConnected = false;
+            if (user.potentialMatches.size() === 0) {
                 log.warn(`User: ${user.socket.id} has no potential matches`);
                 return;
             }
@@ -302,47 +323,59 @@ export class Logic {
             }
             bestMatch = user.potentialMatches.peekAtUser(index);
 
-            if (bestMatch && bestMatch.socket && !bestMatch.isConnected) {
-                log.info(`Found a match for user: ${user.socket.id} with user: ${bestMatch.socket.id}`);
-                user.matchSocket = bestMatch.socket;
-                bestMatch.matchSocket = user.socket;
-                user.isConnected = true;
-                bestMatch.isConnected = true;
-                let matchingTags = this.graph.getCommonTags(user, bestMatch);
-                user.socket.emit('match', [bestMatch.socket.id, matchingTags]);
-                bestMatch.socket.emit('match', [user.socket.id, matchingTags]);
-            } else {
-                log.info(`No match found for user: ${user.socket.id}`);
-            }
+
+                if (bestMatch && bestMatch.socket && !bestMatch.isConnected) {
+                    log.info(`Found a match for user: ${user.socket.id} with user: ${bestMatch.socket.id}`);
+                    user.matchSocket = bestMatch.socket;
+                    bestMatch.matchSocket = user.socket;
+                    user.isConnected = true;
+                    bestMatch.isConnected = true;
+                    let matchingTags = this.graph.getCommonTags(user, bestMatch);
+                    user.socket.emit('match', [bestMatch.socket.id, matchingTags]);
+                    bestMatch.socket.emit('match', [user.socket.id, matchingTags]);
+                } else {
+                    log.info(`No match found for user: ${user.socket.id}`);
+                }
+
         } catch (error) {
             log.error(`Error in searchForMatch for user: ${user.socket.id}. Error: ${error}`);
         }
     }
 
     skipUser(socket: Socket) {
-
+        if(!socket.id) {
+            log.error('Socket id is undefined');
+            return;
+        }
         log.info(`Attempting to skip user with socket id: ${socket.id}`);
         const user = this.getUserBySocket(socket);
-        const skippedUser = this.getUserBySocket(user?.matchSocket);
-        this.skipConnectionEvents(user, skippedUser);
+        const skippedUser = this.getUserBySocket(user.matchSocket);
         if (!user || !skippedUser) {
             log.warn(`User or skipped user not found for socket id: ${socket.id}`);
             return;
         }
+        user.matchSocket = {} as Socket;
+        skippedUser.matchSocket = {} as Socket;
         log.info(`Skipping user: ${user.socket.id} for user: ${skippedUser.socket.id}`);
-        skippedUser.socket.emit('skip');
-        let weight = this.graph.decreaseWeight(user, skippedUser);
-        user.potentialMatches.dequeue(skippedUser);
-        skippedUser.potentialMatches.dequeue(user);
-        user.potentialMatches.enqueue(skippedUser, weight, skippedUser.socket, skippedUser.matchSocket);
-        skippedUser.potentialMatches.enqueue(user, weight, user.socket, user.matchSocket);
         skippedUser.socket.emit("waiting");
         user.socket.emit("waiting");
-        log.info(`Searching for a match for skipped user: ${skippedUser.socket.id}`);
-        this.searchForMatch(skippedUser);
-        log.info(`Searching for a match for user: ${user.socket.id}`);
-        this.searchForMatch(user);
+        let weight = this.graph.decreaseWeight(user, skippedUser);
+        user.potentialMatches.updatePriority(skippedUser, weight);
+        skippedUser.potentialMatches.updatePriority(user, weight);
+        // Remove and add user -> seems to delete user
+        // user.potentialMatches.dequeue(skippedUser);
+        // skippedUser.potentialMatches.dequeue(user);
+        // user.potentialMatches.enqueue(skippedUser, weight, skippedUser.socket, skippedUser.socket.id);
+        // skippedUser.potentialMatches.enqueue(user, weight, user.socket, user.socket.id);
+        log.debug(`Resuming search for user: ${user.socket.id} and user: ${skippedUser.socket.id}`);
+        if (!user.isConnected) {
+            this.searchForMatch(user);
+        }
+        if (!skippedUser.isConnected) {
+            this.searchForMatch(skippedUser);
+        }
     }
+
     removeUser(socket: any) {
         const user = this.getUserBySocket(socket);
         if (user) {
@@ -382,20 +415,16 @@ export class Logic {
     }
 
     getUserBySocket(socket: Socket): User {
+        log.info(`Getting user by socket id: ${socket.id}`);
         if (this.socketMap.get(socket)) {
-            return <User>this.socketMap.get(socket);
+            const user = <User>this.socketMap.get(socket);
+            log.info(`User found with socket id: ${socket.id}`);
+            return user;
         }
+        log.warn(`No user found with socket id: ${socket.id}`);
         return {} as User;
     }
 
-    private skipConnectionEvents(user: User, skippedUser: User) {
-        user.isConnected = false;
-        skippedUser.isConnected = false;
-        user.matchSocket = {} as Socket;
-        skippedUser.matchSocket = {} as Socket;
-        user.potentialMatches.editUserConnectionStatus(skippedUser, false);
-        skippedUser.potentialMatches.editUserConnectionStatus(user, false);
-    }
 }
 
 const logic = new Logic();
