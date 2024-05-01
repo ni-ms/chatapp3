@@ -297,14 +297,10 @@ export class Logic {
             }
             let bestMatch;
             let index = 0;
-            do {
-                bestMatch = user.potentialMatches.peekAtUser(index);
-                if(!bestMatch){
-                    console.error('No best match found');
-                    break;
-                }
+            while (user.potentialMatches.peekAtUser(index)?.isConnected) {
                 index++;
-            } while (bestMatch && bestMatch.isConnected);
+            }
+            bestMatch = user.potentialMatches.peekAtUser(index);
 
             if (bestMatch && bestMatch.socket && !bestMatch.isConnected) {
                 log.info(`Found a match for user: ${user.socket.id} with user: ${bestMatch.socket.id}`);
