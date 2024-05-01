@@ -1,7 +1,8 @@
 import {Server, Socket} from "socket.io";
 import {PriorityQueue} from './priority_queue';
-import {parse, stringify} from 'flatted';
 import express from "express";
+import { Logger, ILogObj } from "tslog";
+const log: Logger<ILogObj> = new Logger();
 
 
 interface ServerToClientEvents {
@@ -49,8 +50,8 @@ const server = app.listen(3000, () => {
 const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(server, {
     cors: {
         origin: "http://localhost:3000",
-        methods: ["GET", "POST"]
-    }
+        methods: ["GET", "POST"],
+    },
 });
 
 export class User {
@@ -62,7 +63,7 @@ export class User {
 
     constructor(socket: Socket, tags: []) {
         this._socket = socket;
-        this._tags = tags
+        this._tags = tags;
         this._isConnected = false;
         // matchId is the socket.id of the user's match
         this._matchSocket = {} as Socket;
@@ -83,6 +84,7 @@ export class User {
 
     set matchSocket(value: Socket) {
         this._matchSocket = value;
+        this._isConnected = value !== null && value !== undefined;
         this._isConnected = value !== {} as Socket;
     }
 
@@ -111,193 +113,150 @@ export class User {
         this._isConnected = value;
     }
 
+    printPriorityQueue() {
+        let queueString = '';
+        for (let i = 0; i < this._potentialMatches.size(); i++) {
+            let item = this._potentialMatches.peekAt(i);
+            queueString += `${item.user.socket.id} - ${item.priority}, `;
+        }
+        console.log('Priority Queue:', queueString.slice(0, -2));
+    }
 
 }
 
 class Connections {
-    // inner map is a map of user to weight. Useful for a global view of the graph
     private connections: Map<string, Map<User, number>>;
     private invertedIndex: Map<string, User[]>;
     private userIdToSocket: Map<string, User>;
-    private addedUsers: Set<string>;
-
 
     constructor() {
         this.connections = new Map();
         this.invertedIndex = new Map();
         this.userIdToSocket = new Map();
-        this.addedUsers = new Set();
     }
 
     addUser(user: User) {
-        console.log('addUser - Adding user:', user.socket.id);
-        console.log('addUser - User tags:', user.tags);
+        log.info(`Attempting to add user with socket id: ${user.socket.id}`);
         if (!Array.isArray(user.tags)) {
-            throw new Error("addUser - Tags must be an array");
+            log.error("Tags must be an array");
+            throw new Error("Tags must be an array");
         }
         this.connections.set(user.socket.id, new Map());
-        console.log('addUser - User added to connections');
+        this.addUserToInvertedIndex(user);
+        this.addConnectionsForUser(user);
+        this.userIdToSocket.set(user.socket.id, user);
+        log.info(`User with socket id: ${user.socket.id} has been added`);
+    }
+
+    private addUserToInvertedIndex(user: User) {
         for (let tag of user.tags) {
             if (!this.invertedIndex.has(tag)) {
                 this.invertedIndex.set(tag, []);
             }
             this.invertedIndex.get(tag)!.push(user);
-            console.log('addUser - User added to inverted index for tag:', tag);
         }
-
-
-        // for (let [_, otherUser] of this.userIdToSocket.entries()) {
-        //     if (this.getCommonTags(user, otherUser).length > 0) {
-        //         this.addConnection(user, otherUser);
-        //         console.log('addUser - Connection added between user:', user.socket.id, 'and other user:', otherUser.socket.id);
-        //     }
-        // }
-
-        for (let tag of user.tags) {
-            let users = this.invertedIndex.get(tag);
-            if (users) {
-                for (let otherUser of users) {
-                    if (otherUser !== user) {
-                        let userConnections = this.connections.get(user.socket.id);
-                        if (userConnections && !userConnections.has(otherUser)) {
-                            this.addConnection(user, otherUser);
-                            console.log('addUser - Connection added between user:', user.socket.id, 'and other user:', otherUser.socket.id);
-                        }
-                    }
-                }
-            }
-        }
-
-        this.userIdToSocket.set(user.socket.id, user);
-        console.log('addUser - User added to userIdToSocket');
     }
 
-    printUserAndConnections() {
-        console.log('<-- USER AND CONNECTIONS -->')
-        for (let [user, connections] of this.connections.entries()) {
-            console.log('User:', user);
-            for (let [otherUser, weight] of connections.entries()) {
-                console.log('Connection:', otherUser.socket.id, weight);
-            }
+    private addConnectionsForUser(user: User) {
+        let connectionSet = this.searchConnections(user);
+        for (let otherUser of connectionSet) {
+            this.addConnection(user, otherUser);
         }
-        console.log('<---------------->')
     }
 
-    printInvertedIndex() {
-        console.log('<-- INVERTED INDEX -->')
-        for (let [tag, users] of this.invertedIndex.entries()) {
-            console.log('Tag:', tag);
-            for (let user of users) {
-                console.log('User:', user.socket.id);
-            }
-        }
-        console.log('<---------------->')
-    }
-
-    searchConnections(user: User): User[] {
+    searchConnections(user: User): Set<User>{
         let potentialUsersSet = new Set<User>();
         for (let tag of user.tags) {
             let users = this.invertedIndex.get(tag);
             if (users) {
                 for (let otherUser of users) {
-                    if (otherUser !== user && !otherUser.isConnected) {
-                        console.log('searchConnections - Potential user for ' + user.socket.id + 'is: ' + otherUser.socket.id)
+                    if (otherUser !== user) {
                         potentialUsersSet.add(otherUser);
                     }
                 }
             }
         }
-        return Array.from(potentialUsersSet);
+        return potentialUsersSet;
     }
 
     addConnection(user: User, otherUser: User) {
+        log.info(`Attempting to add connection between user: ${user.socket.id} and user: ${otherUser.socket.id}`);
         if (!user || !otherUser) {
-            throw new Error("addConnection - User not found");
+            log.error("User not found");
+            throw new Error("User not found");
         }
         let weight = this.getWeight(user, otherUser);
-        console.log('addConnection - Weight between user:', user.socket.id, 'and other user:', otherUser.socket.id, 'is:', weight);
         if (weight === 0) {
-            console.log('addConnection - Weight is 0');
+            log.info(`No weight found for connection between user: ${user.socket.id} and user: ${otherUser.socket.id}`);
             return;
         }
         let userConnections = this.connections.get(user.socket.id);
         let otherUserConnections = this.connections.get(otherUser.socket.id);
-        if (userConnections === undefined || otherUserConnections === undefined) {
-            throw new Error("addConnection - User connections not found");
-        }
-        // Check if the user has already been added to the queue
-        if (this.addedUsers.has(otherUser.socket.id)) {
-            console.log('addConnection - User:', otherUser.socket.id, 'has already been added to the queue. Skipping.');
-            return;
-        }
-
         if (!userConnections?.has(otherUser)) {
             userConnections?.set(otherUser, weight);
             otherUserConnections?.set(user, weight);
             user.potentialMatches.enqueue(otherUser, weight, otherUser.socket, otherUser.socket.id);
             otherUser.potentialMatches.enqueue(user, weight, user.socket, user.socket.id);
-            console.log('addConnection - User added to other user connections');
-
-            // Add the user to the Set of added users
-            this.addedUsers.add(otherUser.socket.id);
+            log.info(`Connection added between user: ${user.socket.id} and user: ${otherUser.socket.id}`);
+        } else {
+            log.info(`Connection already exists between user: ${user.socket.id} and user: ${otherUser.socket.id}`);
         }
     }
 
-
     removeUser(user: User) {
         this.connections.delete(user.socket.id);
-        console.log('removeUser - Inverted index:', this.invertedIndex);
-        // Remove user from inverted index
+        this.removeUserFromInvertedIndex(user);
+        this.userIdToSocket.delete(user.socket.id);
+        this.removeUserFromConnections(user);
+    }
+
+    private removeUserFromInvertedIndex(user: User) {
         for (let [tag, users] of this.invertedIndex.entries()) {
             if (users.includes(user)) {
-                console.log('removeUser - Removing user:', user.socket.id, 'from tag:', tag)
                 users.splice(users.indexOf(user), 1);
                 if (users.length === 0) {
-                    console.log('No more users with tag:', tag)
                     this.invertedIndex.delete(tag);
                 }
             }
         }
-        console.log('removeUser - Inverted index after removing user:', JSON.stringify(this.invertedIndex));
-        this.userIdToSocket.delete(user.socket.id);
-        // Remove user from other users' connections
-        console.log('removeUser - User:', user.socket.id, 'is being removed from connections', this.connections.entries());
+    }
+
+    private removeUserFromConnections(user: User) {
         for (let [otherUser, connections] of this.connections.entries()) {
             if (connections.has(user)) {
-
                 connections.delete(user);
                 let other = this.userIdToSocket.get(otherUser) as User;
-                console.log('removeUser - User:', user.socket.id, 'removed from connections of other user:', other.socket.id)
                 if (other) {
                     other.potentialMatches.dequeue(user);
                 }
             }
         }
-        console.log('removeUser - User removed from connections:', this.connections.entries());
     }
 
     getCommonTags(user1: User, user2: User) {
-        console.log('getCommonTags - User1 tags:', user1.tags);
-        console.log('getCommonTags - User2 tags:', user2.tags);
         return user1.tags.filter(tag => user2.tags.includes(tag));
     }
 
     getWeight(user1: User, user2: User): number {
         let commonTags = this.getCommonTags(user1, user2);
         let totalTags = new Set([...user1.tags, ...user2.tags]).size;
-        console.log('getWeight - Common tags:', commonTags);
-        console.log('getWeight - Total tags:', totalTags);
         return commonTags.length / totalTags;
+    }
+
+    getWeightByConnections(user1: User, user2: User): number {
+        let connections = this.connections.get(user1.socket.id);
+        if (connections && connections.has(user2)) {
+            return connections.get(user2) as number;
+        }
+        return 0;
     }
 
     decreaseWeight(user1: User, user2: User) {
         const weight = this.getWeight(user1, user2);
-        const decreasedWeight = weight - 0.1; // decrease by 10%
+        const decreasedWeight = weight * 0.1; // decrease by 10%
         this.connections.get(user1.socket.id)?.set(user2, decreasedWeight);
         this.connections.get(user2.socket.id)?.set(user1, decreasedWeight);
-        user1.potentialMatches.updatePriority(user2, decreasedWeight);
-        user2.potentialMatches.updatePriority(user1, decreasedWeight);
-        console.log('decreaseWeight - Weight between user:', user1.socket.id, 'and other user:', user2.socket.id, 'is:', decreasedWeight, 'after decrease.', 'Old weight:', weight);
+        return decreasedWeight;
     }
 }
 
@@ -311,105 +270,83 @@ export class Logic {
         this.socketMap = new Map();
     }
 
-
     registerUser(data: { socket: Socket; tags: any; }) {
-
+        log.info(`Registering user with socket id: ${data.socket.id}`);
         const user = new User(data.socket, data.tags);
-        user.isConnected = false;
         user.socket.emit('waiting');
         this.graph.addUser(user);
         this.socketMap.set(data.socket, user);
-
-        // Print the user's potential matches
-        // console.log('Current user priority queue:', stringify(user.potentialMatches));
-        this.graph.printUserAndConnections();
-        this.graph.printInvertedIndex();
+        log.info(`User with socket id: ${data.socket.id} has been registered and added to the graph`);
         this.searchForMatch(user);
         return user;
     }
 
     searchForMatch(user: User) {
-        if (user.isConnected) {
-            console.log('SearchForMatch - User is already connected. Skipping search.');
-            return;
-        }
-        let potentialMatches = this.graph.searchConnections(user);
-        console.log('SearchForMatch - Potential matches:', potentialMatches)
-        for (let match of potentialMatches) {
-            this.graph.addConnection(user, match);
-        }
-        let bestMatch;
-        let index = 0;
-        do {
-            bestMatch = user.potentialMatches.peekAt(index);
-            index++;
-        } while (bestMatch && bestMatch.user.isConnected);
-        if (bestMatch && bestMatch.socket && bestMatch.isConnected === false) {
-            console.log('SearchForMatch - Best match:', bestMatch.socket.id)
-            user.matchSocket = bestMatch.socket;
-            bestMatch.user.matchSocket = user.socket;
-            user.isConnected = true;
-            bestMatch.user.isConnected = true;
-            user.socket.emit('match', bestMatch.socket.id);
-            bestMatch.socket.emit('match', user.socket.id);
+        try {
+            log.info(`Searching for a match for user: ${user.socket.id}`);
+            if(user.matchSocket.id === undefined){
+                user.isConnected = false;
+            }
+            if (user.isConnected) {
+                log.warn(`User: ${user.socket.id} is already connected with user: ${user.matchSocket.id}`);
+                return;
+            }
+            if(user.potentialMatches.size() === 0){
+                log.warn(`User: ${user.socket.id} has no potential matches`);
+                return;
+            }
+            let bestMatch;
+            let index = 0;
+            do {
+                bestMatch = user.potentialMatches.peekAtUser(index);
+                if(!bestMatch){
+                    console.error('No best match found');
+                    break;
+                }
+                index++;
+            } while (bestMatch && bestMatch.isConnected);
+
+            if (bestMatch && bestMatch.socket && !bestMatch.isConnected) {
+                log.info(`Found a match for user: ${user.socket.id} with user: ${bestMatch.socket.id}`);
+                user.matchSocket = bestMatch.socket;
+                bestMatch.matchSocket = user.socket;
+                user.isConnected = true;
+                bestMatch.isConnected = true;
+                let matchingTags = this.graph.getCommonTags(user, bestMatch);
+                user.socket.emit('match', [bestMatch.socket.id, matchingTags]);
+                bestMatch.socket.emit('match', [user.socket.id, matchingTags]);
+            } else {
+                log.info(`No match found for user: ${user.socket.id}`);
+            }
+        } catch (error) {
+            log.error(`Error in searchForMatch for user: ${user.socket.id}. Error: ${error}`);
         }
     }
 
     skipUser(socket: Socket) {
+
+        log.info(`Attempting to skip user with socket id: ${socket.id}`);
         const user = this.getUserBySocket(socket);
-        if (!user) {
-            console.error('skipUser - User not found');
+        const skippedUser = this.getUserBySocket(user?.matchSocket);
+        this.skipConnectionEvents(user, skippedUser);
+        if (!user || !skippedUser) {
+            log.warn(`User or skipped user not found for socket id: ${socket.id}`);
             return;
         }
-        console.log('skipUser - User that is skipping:', user.socket.id)
-
-        if (user.potentialMatches.isEmpty()) {
-            console.error('skipUser - No potential matches for user');
-            return;
-        }
-
-        const skippedUser = this.getUserBySocket(user.matchSocket);
-        if (!skippedUser) {
-            console.error('skipUser - Skipped user not found');
-            return;
-        }
-
-        console.log('skipUser - Skipped user:', skippedUser.socket.id);
-        console.log('skipUser - Old matchSocket for user:', user.matchSocket.id);
-        console.log('skipUser - Old matchSocket for skipped user:', skippedUser.matchSocket.id);
-
-        if (skippedUser) {
-            skippedUser.socket.emit('skip');
-            skippedUser.socket.emit('waiting');
-            this.graph.decreaseWeight(user, skippedUser);
-            this.skipConnectionEvents(user, skippedUser);
-            skippedUser.potentialMatches.updatePriority(user, this.graph.getWeight(user, skippedUser)); // update the priority of the user in the other user's priority queue
-            // search for a new user for the skipped user
-            this.searchForMatch(skippedUser);
-        }
-
-        if (user.potentialMatches.isEmpty()) {
-            console.log('skipUser - No more matches for user');
-            user.socket.emit('waiting');
-            this.searchForMatch(user);
-            return;
-        }
-
-        const newMatch = user.potentialMatches.peek().user as User;
-        if (newMatch) {
-            user.socket.emit('match', newMatch.socket.id);
-            newMatch.socket.emit('match', user.socket.id);
-            user.matchSocket = newMatch.socket;
-            newMatch.matchSocket = user.socket;
-        } else {
-            user.socket.emit('waiting');
-            this.searchForMatch(user);
-        }
-
-        console.log('skipUser - New matchSocket for user:', user.matchSocket.id);
-        console.log('skipUser - New matchSocket for new match:', newMatch.matchSocket.id);
+        log.info(`Skipping user: ${user.socket.id} for user: ${skippedUser.socket.id}`);
+        skippedUser.socket.emit('skip');
+        let weight = this.graph.decreaseWeight(user, skippedUser);
+        user.potentialMatches.dequeue(skippedUser);
+        skippedUser.potentialMatches.dequeue(user);
+        user.potentialMatches.enqueue(skippedUser, weight, skippedUser.socket, skippedUser.matchSocket);
+        skippedUser.potentialMatches.enqueue(user, weight, user.socket, user.matchSocket);
+        skippedUser.socket.emit("waiting");
+        user.socket.emit("waiting");
+        log.info(`Searching for a match for skipped user: ${skippedUser.socket.id}`);
+        this.searchForMatch(skippedUser);
+        log.info(`Searching for a match for user: ${user.socket.id}`);
+        this.searchForMatch(user);
     }
-
     removeUser(socket: any) {
         const user = this.getUserBySocket(socket);
         if (user) {
@@ -421,14 +358,9 @@ export class Logic {
     sendMessage(user1: Socket, user2: Socket, message: string) {
         const sender = this.getUserBySocket(user1);
         const recipient = this.getUserBySocket(user2);
-        console.log('sendMessage - Sender:', sender.socket.id, 'Recipient:', recipient.socket.id);
 
-        // Check if the recipient is the current match of the sender
         if (sender && recipient && sender.matchSocket.id === recipient.socket.id) {
-            console.log('sendMessage - Sending message:', message, 'from user:', user1.id, 'to user:', user2.id);
             user2.emit('message', message);
-        } else {
-            console.log('sendMessage - Message not sent. The recipient is not the current match of the sender.');
         }
     }
 
@@ -465,6 +397,8 @@ export class Logic {
         skippedUser.isConnected = false;
         user.matchSocket = {} as Socket;
         skippedUser.matchSocket = {} as Socket;
+        user.potentialMatches.editUserConnectionStatus(skippedUser, false);
+        skippedUser.potentialMatches.editUserConnectionStatus(user, false);
     }
 }
 
@@ -473,6 +407,10 @@ io.on("connection", (socket) => {
 
     socket.on("register", (data) => {
         try {
+            if (!data || !data.tags) {
+                console.error('Data or tags are undefined');
+                return;
+            }
             const user = logic.registerUser({socket, tags: data.tags});
         } catch (error) {
             console.error(`Error in register event: ${error}`);

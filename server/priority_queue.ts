@@ -50,6 +50,23 @@ export class PriorityQueue<T> {
         return this._heap[index];
     }
 
+    peekAtUser(index: number): T {
+        return this._heap[index].user;
+    }
+
+    editUserConnectionStatus(user: T, status: boolean): void {
+        let indices = this._hashTable.get(user);
+        if (indices) {
+            for (let index of indices) {
+                let element = this._heap[index];
+                if (element.user === user) {
+                    element.isConnected = status;
+                    break;
+                }
+            }
+        }
+    }
+
 
     enqueue(value: T, weight: number, socket: any, matchId: any): number {
         this._heap.push({user: value, priority: weight, matchSocket: matchId, socket: socket, isConnected: false});
