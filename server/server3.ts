@@ -324,18 +324,18 @@ export class Logic {
             bestMatch = user.potentialMatches.peekAtUser(index);
 
 
-                if (bestMatch && bestMatch.socket && !bestMatch.isConnected) {
-                    log.info(`Found a match for user: ${user.socket.id} with user: ${bestMatch.socket.id}`);
-                    user.matchSocket = bestMatch.socket;
-                    bestMatch.matchSocket = user.socket;
-                    user.isConnected = true;
-                    bestMatch.isConnected = true;
-                    let matchingTags = this.graph.getCommonTags(user, bestMatch);
-                    user.socket.emit('match', [bestMatch.socket.id, matchingTags]);
-                    bestMatch.socket.emit('match', [user.socket.id, matchingTags]);
-                } else {
-                    log.info(`No match found for user: ${user.socket.id}`);
-                }
+            if (bestMatch && bestMatch.socket && !bestMatch.isConnected) {
+                log.info(`Found a match for user: ${user.socket.id} with user: ${bestMatch.socket.id}`);
+                user.matchSocket = bestMatch.socket;
+                bestMatch.matchSocket = user.socket;
+                user.isConnected = true;
+                bestMatch.isConnected = true;
+                let matchingTags = this.graph.getCommonTags(user, bestMatch);
+                user.socket.emit('match', [bestMatch.socket.id, matchingTags]);
+                bestMatch.socket.emit('match', [user.socket.id, matchingTags]);
+            } else {
+                log.info(`No match found for user: ${user.socket.id}`);
+            }
 
         } catch (error) {
             log.error(`Error in searchForMatch for user: ${user.socket.id}. Error: ${error}`);
@@ -343,7 +343,7 @@ export class Logic {
     }
 
     skipUser(socket: Socket) {
-        if(!socket.id) {
+        if (!socket.id) {
             log.error('Socket id is undefined');
             return;
         }
