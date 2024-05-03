@@ -2,9 +2,7 @@ import {Server, Socket} from "socket.io";
 import {PriorityQueue} from './priority_queue';
 import express from "express";
 import {Logger, ILogObj} from "tslog";
-
 const log: Logger<ILogObj> = new Logger();
-
 
 interface ServerToClientEvents {
     noArg: () => void;
