@@ -1,6 +1,6 @@
 #To do
 1. Separate the chat rooms [DONE]
-2. add the skip functionality [Somewhat done]
+2. add the skip functionality [Done]
     when a user presses skip, reset the other users connection
 3. Add video and audio chat
 4. Make sure it works with multiple tags [ Done ]
@@ -16,7 +16,7 @@ To Fix:
 
 
 To Fix:
-If a user is skipped, shouldn't be matched with the same user in the next search.
+If a user is skipped, shouldn't be matched with the same user in the next search. [done]
 optimize it for popular tags ( make it dynamic )
 benchmark it
 

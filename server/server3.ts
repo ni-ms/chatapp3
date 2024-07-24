@@ -383,7 +383,9 @@ export class Logic {
     }
 
     sendMessage(user1: Socket, user2: Socket, message: string) {
+        // Redundant check, but need to fix it in the future
         const sender = this.getUserBySocket(user1);
+        log.info(`Sending message from user: ${sender.socket.id} to user: ${user2.id}`);
         const recipient = this.getUserBySocket(user2);
 
         if (sender && recipient && sender.matchSocket.id === recipient.socket.id) {
