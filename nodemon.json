@@ -1,0 +1,7 @@
+{
+    "watch": ["server", "public"],
+    "ext": "ts, js",
+    "ignore": ["dist"],
+    "exec": "npx ts-node server/server3.ts"
+  }
+  

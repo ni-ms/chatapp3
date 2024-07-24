@@ -5,99 +5,123 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>Chat Application</title>
-    <link rel="stylesheet" href="./index.css">
+    <link rel="stylesheet" href="./css/index.css">
+    <!-- <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.1/css/font-awesome.min.css"> -->
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+        integrity="sha512-ZfzfKx2ypMs5yZGxuUT1KNW/vuOcnhzRwaKXXo3MrfKbHs2p/OT3dVCO6VaHf+t8l59P1TWgs4F/N2MRcXrWWA=="
+        crossorigin="anonymous" /> -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.2.1/dist/css/bootstrap.min.css"
         integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <!-- <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin> -->
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Caveat+Brush&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Trocchi&display=swap" rel="stylesheet">
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/font-awesome.min.css"> -->
 </head>
 
 <body>
 
     <!-- Registration Page -->
-    <div id="registration">
-        <h2 class="mb-4">SimplyChat</h2>
-        <div class="form-group" id="gender-form-group">
-            <label for="gender">Gender</label>
-            <select id="gender" class="form-control">
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-            </select>
+    <div id="container1">
+        <!-- <div id="featureSection" style = "display: block;">
+            <div class="feature-items">Make Online Friends</div>
+            <div class="feature-items">End-to-End Encryption</div>
+            <div class="feature-items">Separate Text and Video Chat Window</div>
+            <div class="feature-items">Chat Rooms Available</div>
+        </div> -->
+        <section id="featureSection">
+            <div id="featureHead">FEATURES</div>
+            <div class="feature__container"> </div>
+
+            <!-- <div class="feature__controls">
+                <div class="feature__dots"></div>
+            </div> -->
+        </section>
+        <div id="BubbleBox" style="height:100vh;">
+            <div class="chat1-img-box">
+                <img id="chat1" src="./images/chat1.png">
+            </div>
         </div>
-        <div class="form-group" id="tags-form-group">
-            <label for="tags">Tags</label>
-            <input type="text" id="tags" class="form-control">
+        <div></div>
+        <div id="container">
+            <div class="registration" id="home-page">
+                <div id="sign-up-header">
+                    <!-- <div class="home-btn-group">
+                        <i class="fa fa-home fa" id="home-btn" aria-hidden="true"></i>
+                        <div class="home-btn-label">Home</div>
+                    </div> -->
+                    <h2>Sign In</h2>
+                </div>
+                <div class="form-group" id="username-signup-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" class="form-control">
+                </div>
+                <div class="form-group" id="password-signup-group">
+                    <label for="password">Password</label>
+                    <input type="text" id="password" class="form-control">
+                </div>
+                <button class="hit-btn" id="signin-btn" class="btn btn-primary">Sign In</button>
+                <div id="signreg-stmt">New User? <span class="reg-btn">Register</span> to make
+                    friends</div>
+            </div>
         </div>
-        <button id="chatButton" class="btn btn-primary">Go to Chat</button>
     </div>
 
     <!-- Chat Page -->
-    <div id="chat" style="display: none;">
-        <h2 class="mb-4">Chat</h2>
-        <div id="messages" class="mb-3"></div>
-        <div class="input-group">
-            <input type="text" id="messageInput" class="form-control" placeholder="Type your message">
-            <button id="sendButton" class="btn btn-primary">Send</button>
-            <button id="skipButton" class="btn btn-secondary">Skip</button>
+    <!-- <div id="chat" style="display: none;">
+        <div id="nav-btn-container">
+            <div id="nav-btn">
+                <i class="fa-solid fa-greater-than"></i>
+            </div>
+            <div id="menuBtnDiv">MENU</div>
         </div>
-    </div>
+        <div id="nav-container">
+            <ul>
+                <li class="nav-items" id="top">S</li>
+                <div>
+                    <li class="nav-items"><i class="fa-solid fa-user-group"></i></li>
+                    <div class="nav-label">Friends</div>
+                    <li class="nav-items"><i class="fa-solid fa-door-open"></i></li>
+                    <div class="nav-label">Rooms</div>
+                </div>
+                <div id="bottom">
+                    <li class="nav-items"><i class="fa-solid fa-user" aria-hidden="true"></i></li>
+                    <div class="nav-label">Profile</div>
+                    <li class="nav-items"><i class="fa fa-sign-out" aria-hidden="true"></i></li>
+                    <div class="nav-label">Sign-Out</div>
+                </div>
+            </ul>
+        </div>
+        <div id="centre-box">
+            <h2 class="chat-head">CHAT</h2>
+            <div id="msg-box">
+                <div id="msg-container">
+                    <div id="messages">
+                    </div>
+                    <div id="skip-container">
+                        <button id="skipButton" class="btn btn-secondary">Skip</button>
+                    </div>
+                </div>
+                <div class="input-grp">
+                    <input type="text" id="messageInput" class="form-control" placeholder="Type your message">
+                    <button id="sendButton" class="btn btn-primary">
+                        <i class="fa-solid fa-arrow-right" style="font-size:25px;"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div> -->
+
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
-    <script>
-        $(document).ready(function () {
-            var socket = io.connect('http://localhost:3000');
-
-            function handlePageUnload() {
-                socket.emit('disconnect');
-            }
-
-            // Go to chat page
-            $('#chatButton').click(function () {
-                var gender = $('#gender').val();
-                var tags = $('#tags').val().toLowerCase().split(/[,]+/);
-                // console.log(tags);
-                socket.emit('register', { gender: gender, tags: tags });
-                $('#registration').hide();
-                $('#chat').show().css('display', 'flex');
-            });
-
-            // Send a message
-            $('#sendButton').click(function () {
-                var message = $('#messageInput').val();
-                $('#messages').append('<p class="my-1"> You: ' + message + '</p>');
-                socket.emit('message', message);
-                $('#messageInput').val('');
-                $("#messages").animate({ 
-                    scrollTop: $('#messages').get(0).scrollHeight 
-                }, 2000);
-            });
-
-            // Skip the current match
-            $('#skipButton').click(function () {
-                socket.emit('skip');
-            });
-
-            // Receive a message
-            socket.on('message', function (message) {
-                $('#messages').append('<p class="other-1"> Other: ' + message + '</p>');
-                $("#messages").animate({ 
-                    scrollTop: $('#messages').get(0).scrollHeight 
-                }, 2000);
-            });
-
-            // Match with a user
-            socket.on('match', function (data) {
-                $('#messages').append('<p class="matchmsg">Matched with ' + data + '</p>');
-            });
-
-            // Waiting for a match
-            socket.on('waiting', function () {
-                $('#messages').append('<p class="matchmsg">Waiting for a match</p>');
-            });
-
-            // Handle page unload or navigation
-            $(window).on('beforeunload', handlePageUnload);
-        });
-    </script>
+    <script type = "module" src="./js/index.js"></script>
 </body>
 
 </html>
